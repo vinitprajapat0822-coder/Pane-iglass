@@ -470,6 +470,8 @@ private fun SettingsPanel(
         }
     }
     var selected by remember { mutableStateOf<String?>(null) }
+    var fakeName by remember { mutableStateOf("") }
+    var fakeNumber by remember { mutableStateOf("") }
     val haptics = LocalHapticFeedback.current
     Column(Modifier.fillMaxSize()) {
         Text("Settings", color = Muted, fontSize = 12.sp)
@@ -547,7 +549,36 @@ private fun SettingsPanel(
                     "Call Buttons" -> listOf("Classic dual buttons", "Slide to answer").forEach { option -> Text((if (buttons == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { onButtonsChange(option); selected = null }.padding(12.dp)) }
                     "Incoming Call Style" -> listOf("Banner", "Fullscreen").forEach { option -> Text((if (incoming == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { onIncomingChange(option); selected = null }.padding(12.dp)) }
                     "Call Backgrounds" -> Text("Photo/video call background selection is not connected yet.", color = Muted)
-                    "Fake Call" -> Text("Fake call simulation is not connected yet; no real call will be placed.", color = Muted)
+                    "Fake Call" -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Preview an incoming call. This does not place a real phone call.", color = Muted, fontSize = 12.sp)
+                        BasicTextField(
+                            value = fakeName, onValueChange = { fakeName = it }, singleLine = true,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF111827)).padding(12.dp),
+                            textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
+                            decorationBox = { inner -> if (fakeName.isBlank()) Text("Caller name (optional)", color = Muted, fontSize = 13.sp); inner() }
+                        )
+                        BasicTextField(
+                            value = fakeNumber, onValueChange = { fakeNumber = it }, singleLine = true,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF111827)).padding(12.dp),
+                            textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
+                            decorationBox = { inner -> if (fakeNumber.isBlank()) Text("Phone number", color = Muted, fontSize = 13.sp); inner() }
+                        )
+                        Text(
+                            "START SIMULATED CALL",
+                            color = Accent,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.End).clickable {
+                                if (fakeNumber.isNotBlank()) {
+                                    context.startActivity(Intent(context, InCallActivity::class.java).apply {
+                                        putExtra("pane_fake_call", true)
+                                        putExtra("pane_fake_name", fakeName.ifBlank { "Unknown caller" })
+                                        putExtra("pane_fake_number", fakeNumber)
+                                    })
+                                    selected = null
+                                }
+                            }.padding(10.dp)
+                        )
+                    }
                     "Flash On Call" -> Text("Flashlight hardware integration is not connected yet.", color = Muted)
                     "Privacy Policy" -> Text("Pane has no account backend. Contacts and call log are accessed locally after permission.", color = Muted)
                     else -> Text("This option is listed. Device integration must be implemented before it can change system behavior.", color = Muted)
