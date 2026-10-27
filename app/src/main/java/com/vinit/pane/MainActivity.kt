@@ -1,6 +1,9 @@
 package com.vinit.pane
 
 import android.Manifest
+import android.app.role.RoleManager
+import android.telecom.TelecomManager
+import android.os.Build
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -75,6 +78,12 @@ class MainActivity : ComponentActivity() {
 
     fun hasPermission(permission: String): Boolean =
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    fun isDefaultDialer(): Boolean = DialerRoleHelper.isDefaultDialer(this)
+
+    fun requestDefaultDialer() {
+        DialerRoleHelper.createRequestIntent(this)?.let { startActivity(it) }
+    }
 
     fun readContacts(): List<Person> {
         if (!hasPermission(Manifest.permission.READ_CONTACTS)) return emptyList()
@@ -197,7 +206,22 @@ private fun PaneApp(activity: MainActivity) {
                     Text("AURORA GLASS", color = Muted, fontSize = 10.sp)
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
+                if (!activity.isDefaultDialer()) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF27354B))
+                            .border(1.dp, Line, RoundedCornerShape(16.dp))
+                            .clickable { activity.requestDefaultDialer() }.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Set Pane as default phone app", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Text("Android will ask you to approve this change", color = Muted, fontSize = 11.sp)
+                        }
+                        Text("SET UP", color = Accent, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel)
                         .border(1.dp, Line, RoundedCornerShape(18.dp)).padding(horizontal = 14.dp, vertical = 13.dp),
