@@ -13,6 +13,7 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
             android:name=".InCallActivity"
+            android:theme="@style/PaneCallWindow"
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTop"
