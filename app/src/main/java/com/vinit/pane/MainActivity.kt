@@ -463,6 +463,7 @@ private fun SettingsPanel(
     val context = LocalContext.current
     val prefs = remember(context) { context.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
     val states = remember(prefs) { mutableStateMapOf<String, Boolean>().apply { switchRows.forEach { this[it] = prefs.getBoolean(it, false) } } }
+    var selected by remember { mutableStateOf<String?>(null) }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             states["Flash On Call"] = true
@@ -483,7 +484,6 @@ private fun SettingsPanel(
             selected = null
         }
     }
-    var selected by remember { mutableStateOf<String?>(null) }
     var fakeName by remember { mutableStateOf("") }
     var fakeNumber by remember { mutableStateOf("") }
     val haptics = LocalHapticFeedback.current
