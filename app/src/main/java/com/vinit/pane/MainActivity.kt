@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.hapticfeedback.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -345,6 +348,7 @@ private fun SettingsPanel() {
     val switchRows = setOf("Call Announcer", "Flash On Call", "Contact Photo on Call", "Enable DTMF Tone")
     val states = remember { mutableStateMapOf<String, Boolean>() }
     var selected by remember { mutableStateOf<String?>(null) }
+    val haptics = LocalHapticFeedback.current
     var theme by remember { mutableStateOf("System") }
     var buttons by remember { mutableStateOf("Classic") }
     var incoming by remember { mutableStateOf("Fullscreen") }
@@ -359,7 +363,7 @@ private fun SettingsPanel() {
                         Spacer(Modifier.height(7.dp))
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(horizontal = 13.dp)) {
                             group.second.forEach { row ->
-                                Row(Modifier.fillMaxWidth().clickable { if (row in switchRows) states[row] = !(states[row] ?: false) else selected = row }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.fillMaxWidth().combinedClickable(onClick = { if (row in switchRows) states[row] = !(states[row] ?: false) else selected = row }, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); selected = row }).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text(row, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                         val subtitle = when (row) { "Dialer Themes" -> "Current: " + theme; "Call Buttons" -> "Current: " + buttons; "Incoming Call Style" -> incoming; else -> null }
