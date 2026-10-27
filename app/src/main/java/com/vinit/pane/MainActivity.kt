@@ -210,6 +210,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PaneApp(activity: MainActivity) {
     var selected by remember { mutableStateOf(PaneTab.Favorites) }
@@ -386,7 +387,7 @@ private fun PaneApp(activity: MainActivity) {
                         Column(
                             Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
                                 .background(if (active) Accent.copy(alpha = if (useDarkPalette) 0.22f else 0.14f) else Color.Transparent)
-                                .clickable { selected = tab }.padding(vertical = 8.dp),
+                                .combinedClickable(onClick = { selected = tab }, onLongClick = { showGlass(tab.label) }).padding(vertical = 8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
@@ -609,7 +610,8 @@ private fun RecentsPanel(
                                 ) { Text("i", color = Accent, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
                                 Box(
                                     Modifier.size(38.dp).clip(CircleShape).background(Color(0xFF173C35))
-                                        .border(1.dp, CallGreen.copy(alpha = 0.5f), CircleShape).clickable { onCall(person.number) },
+                                        .border(1.dp, CallGreen.copy(alpha = 0.5f), CircleShape)
+                                        .combinedClickable(onClick = { onCall(person.number) }, onLongClick = { onGlassPress("Call ${person.name}") }),
                                     contentAlignment = Alignment.Center
                                 ) { Icon(Icons.Default.Call, contentDescription = "Open phone dialer", tint = CallGreen) }
                             }
@@ -662,7 +664,8 @@ private fun PeoplePanel(
                         }
                         Box(
                             Modifier.size(39.dp).clip(CircleShape).background(Color(0xFF173C35))
-                                .border(1.dp, CallGreen.copy(alpha = 0.5f), CircleShape).clickable { onCall(person.number) },
+                                .border(1.dp, CallGreen.copy(alpha = 0.5f), CircleShape)
+                                .combinedClickable(onClick = { onCall(person.number) }, onLongClick = { onGlassPress("Call ${person.name}") }),
                             contentAlignment = Alignment.Center
                         ) { Icon(Icons.Default.Call, contentDescription = "Open phone dialer", tint = CallGreen) }
                     }
@@ -693,11 +696,13 @@ private fun KeypadPanel(dialed: String, onDigit: (String) -> Unit, onDelete: () 
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(50.dp), contentAlignment = Alignment.Center) { Text(" ", color = Muted) }
             Box(
-                Modifier.size(58.dp).clip(CircleShape).background(CallGreen).clickable { onCall() },
+                Modifier.size(58.dp).clip(CircleShape).background(CallGreen)
+                    .combinedClickable(onClick = onCall, onLongClick = { onGlassPress("Place call") }),
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Default.Call, contentDescription = "Open system dialer", tint = Night, modifier = Modifier.size(26.dp)) }
             Box(
-                Modifier.size(50.dp).clip(CircleShape).background(Panel).clickable { onDelete() },
+                Modifier.size(50.dp).clip(CircleShape).background(Panel)
+                    .combinedClickable(onClick = onDelete, onLongClick = { onGlassPress("Delete last digit") }),
                 contentAlignment = Alignment.Center
             ) { Text("⌫", color = Ink, fontSize = 22.sp) }
         }
