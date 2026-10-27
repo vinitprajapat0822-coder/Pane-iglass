@@ -21,6 +21,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -59,13 +60,31 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val Night = Color(0xFF0D111B)
-private val Panel = Color(0xCC1B2333)
-private val Line = Color(0xFF39465E)
-private val Ink = Color(0xFFF0F3FF)
-private val Muted = Color(0xFFADB8D0)
-private val Accent = Color(0xFFB9C5FF)
-private val CallGreen = Color(0xFF39D98A)
+private data class PanePalette(
+    val background: Color,
+    val panel: Color,
+    val line: Color,
+    val ink: Color,
+    val muted: Color,
+    val accent: Color,
+    val callGreen: Color
+)
+private val DarkPalette = PanePalette(
+    Color(0xFF0D111B), Color(0xCC1B2333), Color(0xFF39465E),
+    Color(0xFFF0F3FF), Color(0xFFADB8D0), Color(0xFFB9C5FF), Color(0xFF39D98A)
+)
+private val LightPalette = PanePalette(
+    Color(0xFFF3F6FC), Color(0xF2FFFFFF), Color(0xFFD4DDEC),
+    Color(0xFF172033), Color(0xFF63718A), Color(0xFF5368BD), Color(0xFF16865D)
+)
+private val LocalPanePalette = compositionLocalOf { DarkPalette }
+private val Night: Color @Composable get() = LocalPanePalette.current.background
+private val Panel: Color @Composable get() = LocalPanePalette.current.panel
+private val Line: Color @Composable get() = LocalPanePalette.current.line
+private val Ink: Color @Composable get() = LocalPanePalette.current.ink
+private val Muted: Color @Composable get() = LocalPanePalette.current.muted
+private val Accent: Color @Composable get() = LocalPanePalette.current.accent
+private val CallGreen: Color @Composable get() = LocalPanePalette.current.callGreen
 
 private enum class PaneTab(val label: String) {
     Favorites("Favorites"), Recents("Recents"), Contacts("Contacts"), Keypad("Keypad"), Settings("Settings")
@@ -185,6 +204,16 @@ private fun PaneApp(activity: MainActivity) {
     var recentsEditing by remember { mutableStateOf(false) }
     var permissionState by remember { mutableStateOf(false) }
     var defaultDialer by remember { mutableStateOf(activity.isDefaultDialer()) }
+    val prefs = remember(activity) { activity.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
+    var themeChoice by remember(prefs) { mutableStateOf(prefs.getString("dialer_theme", "System") ?: "System") }
+    var buttonsChoice by remember(prefs) { mutableStateOf(prefs.getString("call_buttons", "Classic dual buttons") ?: "Classic dual buttons") }
+    var incomingChoice by remember(prefs) { mutableStateOf(prefs.getString("incoming_style", "Fullscreen") ?: "Fullscreen") }
+    val useDarkPalette = when (themeChoice) {
+        "Dark" -> true
+        "Light" -> false
+        else -> isSystemInDarkTheme()
+    }
+    val palette = if (useDarkPalette) DarkPalette else LightPalette
 
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event ->
@@ -218,8 +247,12 @@ private fun PaneApp(activity: MainActivity) {
         if (missing.isNotEmpty()) permissionLauncher.launch(missing.toTypedArray()) else refresh()
     }
 
+    CompositionLocalProvider(LocalPanePalette provides palette) {
     Surface(Modifier.fillMaxSize(), color = Night) {
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF19243A), Night, Color(0xFF101827))))) {
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+            if (useDarkPalette) listOf(Color(0xFF19243A), Night, Color(0xFF101827))
+            else listOf(Color(0xFFE8EDF7), Night, Color(0xFFF8FAFD))
+        ))) {
             Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -240,8 +273,8 @@ private fun PaneApp(activity: MainActivity) {
                 Spacer(Modifier.height(12.dp))
                 if (!defaultDialer) {
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF27354B))
-                            .border(1.dp, Line, RoundedCornerShape(16.dp))
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel)
+                            .border(1.dp, Line), RoundedCornerShape(16.dp))
                             .clickable { activity.requestDefaultDialer() }.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -302,21 +335,28 @@ private fun PaneApp(activity: MainActivity) {
                             editing = recentsEditing,
                             onEditingChange = { recentsEditing = it }
                         )
-                        PaneTab.Settings -> SettingsPanel()
+                        PaneTab.Settings -> SettingsPanel(
+                            theme = themeChoice,
+                            onThemeChange = { themeChoice = it; prefs.edit().putString("dialer_theme", it).apply() },
+                            buttons = buttonsChoice,
+                            onButtonsChange = { buttonsChoice = it; prefs.edit().putString("call_buttons", it).apply() },
+                            incoming = incomingChoice,
+                            onIncomingChange = { incomingChoice = it; prefs.edit().putString("incoming_style", it).apply() }
+                        )
                     }
                 }
 
                 Spacer(Modifier.height(12.dp))
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color(0xD91B2434))
-                        .border(1.dp, Color(0xFF46536A), RoundedCornerShape(24.dp)).padding(7.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Panel)
+                        .border(1.dp, Line, RoundedCornerShape(24.dp)).padding(7.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     PaneTab.values().forEach { tab ->
                         val active = tab == selected
                         Column(
                             Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
-                                .background(if (active) Color(0xFF344361) else Color.Transparent)
+                                .background(if (active) Accent.copy(alpha = if (useDarkPalette) 0.22f else 0.14f) else Color.Transparent)
                                 .clickable { selected = tab }.padding(vertical = 8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
@@ -338,11 +378,19 @@ private fun PaneApp(activity: MainActivity) {
             }
         }
     }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SettingsPanel() {
+private fun SettingsPanel(
+    theme: String,
+    onThemeChange: (String) -> Unit,
+    buttons: String,
+    onButtonsChange: (String) -> Unit,
+    incoming: String,
+    onIncomingChange: (String) -> Unit
+) {
     val groups = listOf(
         "PERSONALISATION" to listOf("Call Backgrounds", "Dialer Themes", "Call Buttons"),
         "TOOLS" to listOf("Call Announcer", "Flash On Call", "Fake Call"),
@@ -355,9 +403,6 @@ private fun SettingsPanel() {
     val states = remember(prefs) { mutableStateMapOf<String, Boolean>().apply { switchRows.forEach { this[it] = prefs.getBoolean(it, false) } } }
     var selected by remember { mutableStateOf<String?>(null) }
     val haptics = LocalHapticFeedback.current
-    var theme by remember { mutableStateOf(prefs.getString("dialer_theme", "System") ?: "System") }
-    var buttons by remember { mutableStateOf(prefs.getString("call_buttons", "Classic dual buttons") ?: "Classic dual buttons") }
-    var incoming by remember { mutableStateOf(prefs.getString("incoming_style", "Fullscreen") ?: "Fullscreen") }
     Column(Modifier.fillMaxSize()) {
         Text("Settings", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(8.dp))
@@ -393,9 +438,31 @@ private fun SettingsPanel() {
                 Text(selected ?: "", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 when (selected) {
-                    "Dialer Themes" -> listOf("System", "Dark", "Light").forEach { option -> Text((if (theme == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { theme = option; prefs.edit().putString("dialer_theme", option).apply(); selected = null }.padding(12.dp)) }
-                    "Call Buttons" -> listOf("Classic dual buttons", "Slide to answer").forEach { option -> Text((if (buttons == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { buttons = option; prefs.edit().putString("call_buttons", option).apply(); selected = null }.padding(12.dp)) }
-                    "Incoming Call Style" -> listOf("Banner", "Fullscreen").forEach { option -> Text((if (incoming == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { incoming = option; prefs.edit().putString("incoming_style", option).apply(); selected = null }.padding(12.dp)) }
+                    "Dialer Themes" -> Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        listOf("System", "Dark", "Light").forEach { option ->
+                            val previewLight = option == "Light" || (option == "System" && !isSystemInDarkTheme())
+                            val previewBg = if (previewLight) Color(0xFFF3F6FC) else Color(0xFF101827)
+                            val previewText = if (previewLight) Color(0xFF172033) else Color(0xFFF0F3FF)
+                            Column(
+                                Modifier.weight(1f).clip(RoundedCornerShape(15.dp))
+                                    .background(previewBg).border(1.dp, if (theme == option) Accent else Line, RoundedCornerShape(15.dp))
+                                    .clickable { onThemeChange(option); selected = null }.padding(8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopEnd) {
+                                    Text(if (theme == option) "✓" else "", color = Accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    repeat(3) { Box(Modifier.size(11.dp).clip(CircleShape).background(if (previewLight) Color(0xFFD4DDEC) else Color(0xFF344361))) }
+                                }
+                                Spacer(Modifier.height(7.dp))
+                                Text("123", color = previewText, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                Text(option, color = previewText, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                    "Call Buttons" -> listOf("Classic dual buttons", "Slide to answer").forEach { option -> Text((if (buttons == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { onButtonsChange(option); selected = null }.padding(12.dp)) }
+                    "Incoming Call Style" -> listOf("Banner", "Fullscreen").forEach { option -> Text((if (incoming == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { onIncomingChange(option); selected = null }.padding(12.dp)) }
                     "Call Backgrounds" -> Text("Photo/video call background selection is not connected yet.", color = Muted)
                     "Fake Call" -> Text("Fake call simulation is not connected yet; no real call will be placed.", color = Muted)
                     "Flash On Call" -> Text("Flashlight hardware integration is not connected yet.", color = Muted)
