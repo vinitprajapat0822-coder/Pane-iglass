@@ -10,13 +10,15 @@ Pane is a native Android phone/dialer project built with Kotlin and Jetpack Comp
 - Recents are queried from Android's Call Log Provider after runtime permission is granted.
 - Search filters real contacts and recent-call rows by name or number.
 - Keypad and contact call actions open Android's system dialer with the selected number, so the user can confirm the call there.
+- A setup banner can request Android's official default-phone-app role; Android presents the approval UI and the user remains in control.
 - Runtime permission denial is handled with a useful empty state rather than demo contact data.
 - GitHub Actions builds a debug APK and uploads it as an artifact when a build succeeds.
 
 ## Important current limits
 
 - This is not yet a full default-dialer replacement. The app currently hands off to Android's system dialer; it does not yet own the active/incoming call UI.
-- Android's default-dialer role, InCallService, native answer/reject controls, call-state lifecycle, and device-level call testing remain future work.
+- The default-dialer role request helper is present, but this project is not yet eligible to act as a complete replacement dialer until a proper InCallService and call UI are implemented and declared.
+- Native answer/reject controls, call-state lifecycle, and device-level call testing remain future work.
 - A successful CI build is required before considering the current source build-verified. A CI build does not replace testing on a physical phone.
 - Call-log and contacts access are permission-gated. Distribution through Google Play may require policy review for call-log permissions.
 
