@@ -389,7 +389,7 @@ private fun SettingsPanel() {
     }
     if (selected != null) {
         androidx.compose.ui.window.Dialog(onDismissRequest = { selected = null }) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color(0xFF202B3F)).border(1.dp, Line, RoundedCornerShape(24.dp)).padding(18.dp)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Panel).border(1.dp, Line, RoundedCornerShape(24.dp)).padding(18.dp)) {
                 Text(selected ?: "", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 when (selected) {
