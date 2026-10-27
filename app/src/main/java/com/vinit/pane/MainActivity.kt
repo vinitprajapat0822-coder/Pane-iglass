@@ -633,7 +633,10 @@ private fun RecentsPanel(
                     Box(
                         Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
                             .background(if (filter == option) Color(0xFF344361) else Color.Transparent)
-                            .clickable { onFilterChange(option) }.padding(vertical = 9.dp),
+                            .combinedClickable(
+                                onClick = { onFilterChange(option) },
+                                onLongClick = { onGlassPress("Recent calls filter: $option") }
+                            ).padding(vertical = 9.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(option, color = if (filter == option) Ink else Muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
@@ -642,7 +645,10 @@ private fun RecentsPanel(
             }
             Spacer(Modifier.width(10.dp))
             Text(if (editing) "Done" else "Edit", color = Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { onEditingChange(!editing) }.padding(8.dp))
+                modifier = Modifier.combinedClickable(
+                    onClick = { onEditingChange(!editing) },
+                    onLongClick = { onGlassPress(if (editing) "Finish editing recents" else "Edit recent calls") }
+                ).padding(8.dp))
         }
         Spacer(Modifier.height(12.dp))
         Text("CALL LOG · LATEST FIRST", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
@@ -679,7 +685,10 @@ private fun RecentsPanel(
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     Modifier.size(32.dp).clip(CircleShape).background(Panel).border(1.dp, Line, CircleShape)
-                                        .clickable { onGlassPress("Call details\n${person.name}\n${person.number}\n${person.type} · ${person.timestamp}\n${person.simLabel}") },
+                                        .combinedClickable(
+                                            onClick = { onGlassPress("Call details\n${person.name}\n${person.number}\n${person.type} · ${person.timestamp}\n${person.simLabel}") },
+                                            onLongClick = { onGlassPress("Call details · ${person.name}") }
+                                        ),
                                     contentAlignment = Alignment.Center
                                 ) { Text("i", color = Accent, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
                                 Box(
