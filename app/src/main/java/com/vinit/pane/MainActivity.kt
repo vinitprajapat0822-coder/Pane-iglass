@@ -48,7 +48,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.Text as MaterialText
 import androidx.compose.runtime.*
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -65,9 +65,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
 import androidx.core.content.ContextCompat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -91,6 +94,89 @@ private val LightPalette = PanePalette(
     Color(0xFF172033), Color(0xFF63718A), Color(0xFF5368BD), Color(0xFF16865D)
 )
 private val LocalPanePalette = compositionLocalOf { DarkPalette }
+private val LocalPaneLanguage = compositionLocalOf { "System default" }
+
+private val HindiLabels = mapOf(
+    "Favourites" to "पसंदीदा",
+    "Your people" to "आपके लोग",
+    "Recent calls" to "हाल की कॉल",
+    "Contacts" to "संपर्क",
+    "Keypad" to "डायल पैड",
+    "Settings" to "सेटिंग्स",
+    "PERSONALISATION" to "निजीकरण",
+    "TOOLS" to "टूल्स",
+    "GENERAL" to "सामान्य",
+    "OTHER" to "अन्य",
+    "Call Backgrounds" to "कॉल बैकग्राउंड",
+    "Dialer Themes" to "डायलर थीम",
+    "Call Buttons" to "कॉल बटन",
+    "Call Announcer" to "कॉलर घोषणा",
+    "Flash On Call" to "कॉल पर फ्लैश",
+    "Fake Call" to "नकली कॉल",
+    "Call Back Screen" to "कॉल-बैक स्क्रीन",
+    "Contact Photo on Call" to "कॉल पर संपर्क फोटो",
+    "Enable DTMF Tone" to "DTMF टोन",
+    "SIM Preference" to "SIM प्राथमिकता",
+    "Accessibility" to "सुलभता",
+    "Default Launch Screen" to "शुरुआती स्क्रीन",
+    "Voicemail" to "वॉइसमेल",
+    "Sound & Vibration" to "ध्वनि और कंपन",
+    "Speed Dial" to "स्पीड डायल",
+    "Incoming Call Style" to "इनकमिंग कॉल शैली",
+    "Call Blocker" to "कॉल ब्लॉकर",
+    "Quick Response" to "त्वरित जवाब",
+    "Language" to "भाषा",
+    "Call Settings" to "कॉल सेटिंग्स",
+    "Help & FAQ" to "सहायता और FAQ",
+    "Rate App" to "ऐप रेट करें",
+    "Privacy Policy" to "गोपनीयता नीति",
+    "All" to "सभी",
+    "Missed" to "मिस्ड",
+    "Edit" to "संपादित करें",
+    "Done" to "हो गया",
+    "CALL LOG · LATEST FIRST" to "कॉल सूची · नई कॉल पहले",
+    "PHONE CONTACTS" to "फोन संपर्क",
+    "STARRED CONTACTS" to "पसंदीदा संपर्क",
+    "Search names or numbers" to "नाम या नंबर खोजें",
+    "Enter a number" to "नंबर दर्ज करें",
+    "No recent calls found." to "हाल की कॉल नहीं हैं।",
+    "No matching contacts." to "मिलते-जुलते संपर्क नहीं मिले।"
+)
+
+@Composable
+private fun localizedLabel(text: String): String =
+    if (LocalPaneLanguage.current == "हिन्दी") HindiLabels[text] ?: text else text
+
+@Composable
+private fun Text(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    fontSize: TextUnit = TextUnit.Unspecified,
+    fontWeight: FontWeight? = null,
+    textAlign: TextAlign? = null,
+    letterSpacing: TextUnit = TextUnit.Unspecified,
+    lineHeight: TextUnit = TextUnit.Unspecified,
+    maxLines: Int = Int.MAX_VALUE,
+    softWrap: Boolean = true,
+    overflow: TextOverflow = TextOverflow.Clip,
+    style: TextStyle = LocalTextStyle.current
+) {
+    MaterialText(
+        text = localizedLabel(text),
+        modifier = modifier,
+        color = color,
+        fontSize = fontSize,
+        fontWeight = fontWeight,
+        textAlign = textAlign,
+        letterSpacing = letterSpacing,
+        lineHeight = lineHeight,
+        maxLines = maxLines,
+        softWrap = softWrap,
+        overflow = overflow,
+        style = style
+    )
+}
 private val Night: Color @Composable get() = LocalPanePalette.current.background
 private val Panel: Color @Composable get() = LocalPanePalette.current.panel
 private val Line: Color @Composable get() = LocalPanePalette.current.line
@@ -326,7 +412,7 @@ private fun PaneApp(activity: MainActivity) {
         if (missing.isNotEmpty()) permissionLauncher.launch(missing.toTypedArray()) else refresh()
     }
 
-    CompositionLocalProvider(LocalPanePalette provides palette) {
+    CompositionLocalProvider(LocalPanePalette provides palette, LocalPaneLanguage provides (prefs.getString("app_language", "System default") ?: "System default")) {
     Surface(Modifier.fillMaxSize(), color = Night) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
             if (useDarkPalette) listOf(Color(0xFF19243A), Night, Color(0xFF101827))
