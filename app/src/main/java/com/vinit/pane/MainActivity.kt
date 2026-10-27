@@ -970,14 +970,14 @@ private fun RecentsPanel(
                 listOf("All", "Missed").forEach { option ->
                     Box(
                         Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
-                            .background(if (filter == option) Color(0xFF344361) else Color.Transparent)
+                            .background(if (filter == option) Accent.copy(alpha = 0.19f) else Color.Transparent)
                             .combinedClickable(
                                 onClick = { onFilterChange(option) },
                                 onLongClick = { onGlassPress("Recent calls filter: $option") }
                             ).padding(vertical = 9.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(option, color = if (filter == option) Ink else Muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(option, color = if (filter == option) Accent else Muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -1008,7 +1008,7 @@ private fun RecentsPanel(
                             Modifier.size(43.dp).clip(CircleShape)
                                 .background(Brush.linearGradient(listOf(Color(0xFF536A95), Color(0xFF293750)))),
                             contentAlignment = Alignment.Center
-                        ) { Text(person.initials, color = Ink, fontWeight = FontWeight.SemiBold) }
+                        ) { Text(person.initials, color = Color.White, fontWeight = FontWeight.SemiBold) }
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(person.name, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -1074,7 +1074,7 @@ private fun PeoplePanel(
                             Modifier.size(45.dp).clip(CircleShape)
                                 .background(Brush.linearGradient(listOf(Color(0xFF536A95), Color(0xFF293750)))),
                             contentAlignment = Alignment.Center
-                        ) { Text(person.initials, color = Ink, fontWeight = FontWeight.SemiBold) }
+                        ) { Text(person.initials, color = Color.White, fontWeight = FontWeight.SemiBold) }
                         Spacer(Modifier.width(11.dp))
                         Column(Modifier.weight(1f)) {
                             Text(person.name, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -1132,9 +1132,9 @@ private fun KeypadPanel(
             Row(horizontalArrangement = Arrangement.spacedBy(17.dp), modifier = Modifier.padding(bottom = 9.dp)) {
                 row.forEach { key ->
                     Box(
-                        Modifier.size(60.dp).clip(CircleShape).background(Panel).border(1.dp, Line, CircleShape)
+                        Modifier.size(64.dp).shadow(5.dp, CircleShape).clip(CircleShape).background(Panel).border(1.dp, Line.copy(alpha = 0.85f), CircleShape)
                             .combinedClickable(onClick = { onDigit(key) }, onLongClick = { onGlassPress("Key $key") }), contentAlignment = Alignment.Center
-                    ) { Text(key, color = Ink, fontSize = 23.sp, fontWeight = FontWeight.Medium) }
+                    ) { Text(key, color = Ink, fontSize = 24.sp, fontWeight = FontWeight.SemiBold) }
                 }
             }
         }
