@@ -61,7 +61,7 @@ private enum class PaneTab(val label: String) {
     Favorites("Favorites"), Recents("Recents"), Contacts("Contacts"), Keypad("Keypad")
 }
 
-private data class Person(
+internal data class Person(
     val id: String,
     val name: String,
     val number: String,
@@ -87,7 +87,7 @@ class MainActivity : ComponentActivity() {
         DialerRoleHelper.createRequestIntent(this)?.let { startActivity(it) }
     }
 
-    fun readContacts(): List<Person> {
+    internal fun readContacts(): List<Person> {
         if (!hasPermission(Manifest.permission.READ_CONTACTS)) return emptyList()
         val result = mutableListOf<Person>()
         val projection = arrayOf(
@@ -120,7 +120,7 @@ class MainActivity : ComponentActivity() {
         return result.distinctBy { it.id + "|" + it.number }
     }
 
-    fun readRecents(): List<Person> {
+    internal fun readRecents(): List<Person> {
         if (!hasPermission(Manifest.permission.READ_CALL_LOG)) return emptyList()
         val result = mutableListOf<Person>()
         val projection = arrayOf(
