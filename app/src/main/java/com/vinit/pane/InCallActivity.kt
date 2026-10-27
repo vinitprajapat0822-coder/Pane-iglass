@@ -160,6 +160,11 @@ private fun InCallScreen() {
     val state by remember { derivedStateOf { PaneCallController.state } }
     val name by remember { derivedStateOf { PaneCallController.displayName } }
     val number by remember { derivedStateOf { PaneCallController.number } }
+    val callEndSequence by remember { derivedStateOf { PaneCallController.callEndSequence } }
+    val lastEndedName by remember { derivedStateOf { PaneCallController.lastEndedName } }
+    val lastEndedNumber by remember { derivedStateOf { PaneCallController.lastEndedNumber } }
+    val initialCallEndSequence = remember { PaneCallController.callEndSequence }
+    var showPostCall by remember { mutableStateOf(false) }
     val hostActivity = context as? InCallActivity
     val fakeCall = remember(hostActivity) { hostActivity?.intent?.getBooleanExtra("pane_fake_call", false) == true }
     val fakeName = remember(hostActivity) { hostActivity?.intent?.getStringExtra("pane_fake_name").orEmpty().ifBlank { "Unknown caller" } }
@@ -167,6 +172,16 @@ private fun InCallScreen() {
     val fakeAnswered = remember { mutableStateOf(false) }
     val displayName = if (fakeCall) fakeName else name
     val displayNumber = if (fakeCall) fakeNumber else number
+    LaunchedEffect(callEndSequence, fakeCall) {
+        if (!fakeCall && callEndSequence > initialCallEndSequence) {
+            if (prefs.getBoolean("Call Back Screen", true) && lastEndedNumber.isNotBlank()) {
+                showPostCall = true
+                hostActivity?.setCallWindowMode(false)
+            } else {
+                hostActivity?.finish()
+            }
+        }
+    }
     val callBackgroundBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, backgroundUri, backgroundType) {
         value = if (backgroundUri != null && backgroundType != "video") {
             withContext(Dispatchers.IO) {
@@ -301,13 +316,26 @@ private fun InCallScreen() {
                 Spacer(Modifier.height(12.dp))
                 Text(status, color = CallMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                 Spacer(Modifier.height(if (bannerMode) 14.dp else 52.dp))
-                if ((active || state == Call.STATE_HOLDING) && !fakeCall) {
+                if (showPostCall) {
+                    Text("CALL ENDED", color = CallAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                    Spacer(Modifier.height(14.dp))
+                    Text(lastEndedName.ifBlank { "Last caller" }, color = CallText, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2)
+                    Text(lastEndedNumber, color = CallMuted, fontSize = 15.sp)
+                    Spacer(Modifier.height(26.dp))
+                    CallAction("Call back", CallAccent, onLongPress = { showGlass("Call back") }) {
+                        val numberToCall = lastEndedNumber
+                        hostActivity?.finish()
+                        runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", numberToCall, null))) }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    CallAction("Close", CallCard, onLongPress = { showGlass("Close callback screen") }) { hostActivity?.finish() }
+                } else if ((active || state == Call.STATE_HOLDING) && !fakeCall) {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         CallAction(if (muted) "Unmute" else "Mute", if (muted) CallAccent else CallCard, onLongPress = { showGlass(if (muted) "Unmute" else "Mute") }) { PaneCallController.toggleMute() }
                         CallAction(if (speaker) "Speaker on" else "Speaker", if (speaker) CallAccent else CallCard, onLongPress = { showGlass("Speaker control") }) { PaneCallController.toggleSpeaker() }
                     }
                     Spacer(Modifier.height(26.dp))
-                    CallAction("End call", CallRed, onLongPress = { showGlass("End call") }) { PaneCallController.end(); hostActivity?.finish() }
+                    CallAction("End call", CallRed, onLongPress = { showGlass("End call") }) { PaneCallController.end() }
                 } else if (fakeCall && fakeAnswered.value) {
                     CallAction("End simulated call", CallRed, onLongPress = { showGlass("End simulated call") }) { hostActivity?.finish() }
                 } else if (ringing) {
@@ -334,7 +362,7 @@ private fun InCallScreen() {
                         if (fakeCall) hostActivity?.finish() else { PaneCallController.reject(); hostActivity?.finish() }
                     }
                 } else if (call != null) {
-                    CallAction("End call", CallRed, onLongPress = { showGlass("End call") }) { PaneCallController.end(); hostActivity?.finish() }
+                    CallAction("End call", CallRed, onLongPress = { showGlass("End call") }) { PaneCallController.end() }
                 } else {
                     Text("Call screen opens when Android Telecom delivers a call.", color = CallMuted, textAlign = TextAlign.Center)
                 }
