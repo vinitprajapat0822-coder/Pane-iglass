@@ -463,6 +463,12 @@ private fun SettingsPanel(
     val context = LocalContext.current
     val prefs = remember(context) { context.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
     val states = remember(prefs) { mutableStateMapOf<String, Boolean>().apply { switchRows.forEach { this[it] = prefs.getBoolean(it, false) } } }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            states["Flash On Call"] = true
+            prefs.edit().putBoolean("Flash On Call", true).apply()
+        }
+    }
     var selected by remember { mutableStateOf<String?>(null) }
     val haptics = LocalHapticFeedback.current
     Column(Modifier.fillMaxSize()) {
@@ -476,7 +482,22 @@ private fun SettingsPanel(
                         Spacer(Modifier.height(7.dp))
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(horizontal = 13.dp)) {
                             group.second.forEach { row ->
-                                Row(Modifier.fillMaxWidth().combinedClickable(onClick = { if (row in switchRows) { val enabled = !(states[row] ?: false); states[row] = enabled; prefs.edit().putBoolean(row, enabled).apply() } else selected = row }, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onGlassPress(row) }).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.fillMaxWidth().combinedClickable(
+                                    onClick = {
+                                        if (row in switchRows) {
+                                            val enabled = !(states[row] ?: false)
+                                            if (row == "Flash On Call" && enabled &&
+                                                ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
+                                            ) {
+                                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                            } else {
+                                                states[row] = enabled
+                                                prefs.edit().putBoolean(row, enabled).apply()
+                                            }
+                                        } else selected = row
+                                    },
+                                    onLongClick = { onGlassPress(row) }
+                                ).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text(row, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                         val subtitle = when (row) { "Dialer Themes" -> "Current: " + theme; "Call Buttons" -> "Current: " + buttons; "Incoming Call Style" -> incoming; else -> null }
