@@ -49,6 +49,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private val Night = Color(0xFF0D111B)
 private val Panel = Color(0xCC1B2333)
@@ -67,7 +70,8 @@ internal data class Person(
     val name: String,
     val number: String,
     val starred: Boolean = false,
-    val type: String = ""
+    val type: String = "",
+    val timestamp: String = ""
 ) {
     val initials: String get() = name.split(" ").filter { it.isNotBlank() }.take(2)
         .mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").ifBlank { "#" }
@@ -135,6 +139,7 @@ class MainActivity : ComponentActivity() {
                 val numberCol = cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)
                 val nameCol = cursor.getColumnIndexOrThrow(CallLog.Calls.CACHED_NAME)
                 val typeCol = cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE)
+                val dateCol = cursor.getColumnIndexOrThrow(CallLog.Calls.DATE)
                 val idCol = cursor.getColumnIndexOrThrow(CallLog.Calls._ID)
                 while (cursor.moveToNext()) {
                     val number = cursor.getString(numberCol).orEmpty()
@@ -146,7 +151,8 @@ class MainActivity : ComponentActivity() {
                         CallLog.Calls.REJECTED_TYPE -> "Rejected"
                         else -> "Call"
                     }
-                    result += Person(cursor.getString(idCol).orEmpty(), name, number, type = type)
+                    val timestamp = runCatching { SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date(cursor.getLong(dateCol))) }.getOrDefault("")
+                    result += Person(cursor.getString(idCol).orEmpty(), name, number, type = type, timestamp = timestamp)
                 }
             }
         }
@@ -169,6 +175,8 @@ private fun PaneApp(activity: MainActivity) {
     var dialed by remember { mutableStateOf("") }
     var contacts by remember { mutableStateOf(emptyList<Person>()) }
     var recents by remember { mutableStateOf(emptyList<Person>()) }
+    var recentFilter by remember { mutableStateOf("All") }
+    var recentsEditing by remember { mutableStateOf(false) }
     var permissionState by remember { mutableStateOf(false) }
     var defaultDialer by remember { mutableStateOf(activity.isDefaultDialer()) }
 
@@ -278,12 +286,15 @@ private fun PaneApp(activity: MainActivity) {
                             emptyMessage = if (!activity.hasPermission(Manifest.permission.READ_CONTACTS)) "Allow Contacts permission to load favorites." else "No starred contacts found. Star contacts in your phone's Contacts app.",
                             onCall = activity::openDialer
                         )
-                        PaneTab.Recents -> PeoplePanel(
-                            title = "CALL LOG · LATEST FIRST",
-                            people = recents.filter { it.name.contains(query, true) || it.number.contains(query, true) },
+                        PaneTab.Recents -> RecentsPanel(
+                            people = recents.filter { it.name.contains(query, true) || it.number.contains(query, true) }
+                                .filter { recentFilter == "All" || it.type == "Missed" },
                             emptyMessage = if (!activity.hasPermission(Manifest.permission.READ_CALL_LOG)) "Call-log permission is needed to show recent calls." else "No recent calls found.",
                             onCall = activity::openDialer,
-                            showType = true
+                            filter = recentFilter,
+                            onFilterChange = { recentFilter = it },
+                            editing = recentsEditing,
+                            onEditingChange = { recentsEditing = it }
                         )
                         PaneTab.Settings -> SettingsPanel()
                     }
@@ -387,6 +398,81 @@ private fun SettingsPanel() {
         }
     }
 }
+@Composable
+private fun RecentsPanel(
+    people: List<Person>,
+    emptyMessage: String,
+    onCall: (String) -> Unit,
+    filter: String,
+    onFilterChange: (String) -> Unit,
+    editing: Boolean,
+    onEditingChange: (Boolean) -> Unit
+) {
+    Column(Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(Panel)
+                    .border(1.dp, Line, RoundedCornerShape(14.dp)).padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf("All", "Missed").forEach { option ->
+                    Box(
+                        Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                            .background(if (filter == option) Color(0xFF344361) else Color.Transparent)
+                            .clickable { onFilterChange(option) }.padding(vertical = 9.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(option, color = if (filter == option) Ink else Muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(if (editing) "Done" else "Edit", color = Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { onEditingChange(!editing) }.padding(8.dp))
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("CALL LOG · LATEST FIRST", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        Spacer(Modifier.height(9.dp))
+        if (people.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(emptyMessage, color = Muted, textAlign = TextAlign.Center, modifier = Modifier.padding(20.dp))
+            }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
+                items(people, key = { it.id + "|" + it.number + "|" + it.type }) { person ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel)
+                            .border(1.dp, Line.copy(alpha = 0.8f), RoundedCornerShape(18.dp)).padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier.size(43.dp).clip(CircleShape)
+                                .background(Brush.linearGradient(listOf(Color(0xFF536A95), Color(0xFF293750)))),
+                            contentAlignment = Alignment.Center
+                        ) { Text(person.initials, color = Ink, fontWeight = FontWeight.SemiBold) }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(person.name, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("${when (person.type) { "Missed" -> "↙ Missed"; "Outgoing" -> "↗ Outgoing"; "Incoming" -> "↙ Incoming"; else -> person.type }} · ${person.number}",
+                                color = if (person.type == "Missed") Color(0xFFFF8585) else Muted, fontSize = 11.sp)
+                            Text(person.timestamp, color = Muted, fontSize = 10.sp)
+                        }
+                        if (editing) {
+                            Text("⋯", color = Accent, fontSize = 22.sp, modifier = Modifier.padding(horizontal = 8.dp))
+                        } else {
+                            Box(
+                                Modifier.size(38.dp).clip(CircleShape).background(Color(0xFF173C35))
+                                    .border(1.dp, CallGreen.copy(alpha = 0.5f), CircleShape).clickable { onCall(person.number) },
+                                contentAlignment = Alignment.Center
+                            ) { Icon(Icons.Default.Call, contentDescription = "Open phone dialer", tint = CallGreen) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun PeoplePanel(
     title: String,
