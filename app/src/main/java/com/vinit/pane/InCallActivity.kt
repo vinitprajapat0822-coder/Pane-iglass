@@ -134,7 +134,14 @@ class InCallActivity : ComponentActivity() {
                 window.attributes = params
             } else {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-                window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+                val params = window.attributes
+                params.width = WindowManager.LayoutParams.MATCH_PARENT
+                params.height = WindowManager.LayoutParams.MATCH_PARENT
+                params.gravity = Gravity.CENTER
+                params.x = 0
+                params.y = 0
+                params.dimAmount = 0f
+                window.attributes = params
             }
         }
     }
