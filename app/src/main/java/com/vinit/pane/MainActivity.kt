@@ -469,6 +469,20 @@ private fun SettingsPanel(
             prefs.edit().putBoolean("Flash On Call", true).apply()
         }
     }
+    val imageBackgroundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            prefs.edit().putString("call_background_uri", uri.toString()).putString("call_background_type", "image").apply()
+            selected = null
+        }
+    }
+    val videoBackgroundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            prefs.edit().putString("call_background_uri", uri.toString()).putString("call_background_type", "video").apply()
+            selected = null
+        }
+    }
     var selected by remember { mutableStateOf<String?>(null) }
     var fakeName by remember { mutableStateOf("") }
     var fakeNumber by remember { mutableStateOf("") }
@@ -548,7 +562,14 @@ private fun SettingsPanel(
                     }
                     "Call Buttons" -> listOf("Classic dual buttons", "Slide to answer").forEach { option -> Text((if (buttons == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { onButtonsChange(option); selected = null }.padding(12.dp)) }
                     "Incoming Call Style" -> listOf("Banner", "Fullscreen").forEach { option -> Text((if (incoming == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { onIncomingChange(option); selected = null }.padding(12.dp)) }
-                    "Call Backgrounds" -> Text("Photo/video call background selection is not connected yet.", color = Muted)
+                    "Call Backgrounds" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Saved background: " + if (prefs.getString("call_background_uri", null) == null) "None" else prefs.getString("call_background_type", "image")!!.replaceFirstChar { it.uppercase() }, color = Muted, fontSize = 12.sp)
+                        Text("CHOOSE PHOTO", color = Accent, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth().clickable { imageBackgroundPicker.launch(arrayOf("image/*")) }.padding(vertical = 12.dp))
+                        Text("CHOOSE VIDEO", color = Accent, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth().clickable { videoBackgroundPicker.launch(arrayOf("video/*")) }.padding(vertical = 12.dp))
+                        Text("Background applies to the incoming/active call screen.", color = Muted, fontSize = 11.sp)
+                    }
                     "Fake Call" -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Preview an incoming call. This does not place a real phone call.", color = Muted, fontSize = 12.sp)
                         BasicTextField(
