@@ -9,6 +9,8 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.speech.tts.TextToSpeech
 import android.os.Bundle
+import android.view.Gravity
+import android.view.WindowManager
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.ContactsContract
@@ -81,7 +83,29 @@ class InCallActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
+        setCallWindowMode(
+            getSharedPreferences("pane_settings", Context.MODE_PRIVATE).getString("incoming_style", "Fullscreen") == "Banner" &&
+                PaneCallController.state == Call.STATE_RINGING
+        )
         setContent { MaterialTheme { androidx.compose.runtime.CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif, letterSpacing = 0.12.sp)) { InCallScreen() } } }
+    }
+
+    fun setCallWindowMode(banner: Boolean) {
+        runCatching {
+            if (banner) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                val params = window.attributes
+                params.width = (resources.displayMetrics.widthPixels * 0.92f).toInt()
+                params.height = (resources.displayMetrics.density * 450f).toInt()
+                params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                params.y = (resources.displayMetrics.density * 18f).toInt()
+                params.dimAmount = 0.45f
+                window.attributes = params
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+            }
+        }
     }
 }
 
@@ -139,6 +163,8 @@ private fun InCallScreen() {
     val muted by remember { derivedStateOf { PaneCallController.muted } }
     val speaker by remember { derivedStateOf { PaneCallController.speaker } }
     val ringing = state == Call.STATE_RINGING || (fakeCall && !fakeAnswered.value)
+    val bannerMode = (prefs.getString("incoming_style", "Fullscreen") ?: "Fullscreen") == "Banner" && ringing
+    LaunchedEffect(bannerMode) { hostActivity?.setCallWindowMode(bannerMode) }
     DisposableEffect(announceCaller, ringing, displayName, displayNumber) {
         var engine: TextToSpeech? = null
         if (announceCaller && ringing) {
@@ -194,59 +220,68 @@ private fun InCallScreen() {
         else -> if (call == null) "NO ACTIVE CALL" else "CALL STATUS"
     }
 
-    Surface(Modifier.fillMaxSize(), color = CallBg) {
-        Box(Modifier.fillMaxSize().background(CallBg)) {
-            if (backgroundType == "video" && !backgroundUri.isNullOrBlank()) {
-                LoopingVideoBackground(backgroundUri)
-            } else if (callBackgroundBitmap != null) {
-                Image(
-                    bitmap = callBackgroundBitmap!!,
-                    contentDescription = "Selected call background",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+    Surface(Modifier.fillMaxSize(), color = if (bannerMode) Color.Transparent else CallBg) {
+        Box(
+            Modifier.fillMaxSize().then(
+                if (bannerMode) Modifier.clip(RoundedCornerShape(28.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xF21F2B40), Color(0xF50D111B))))
+                    .border(1.dp, Color.White.copy(alpha = 0.42f), RoundedCornerShape(28.dp))
+                else Modifier.background(CallBg)
+            )
+        ) {
+            if (!bannerMode) {
+                if (backgroundType == "video" && !backgroundUri.isNullOrBlank()) {
+                    LoopingVideoBackground(backgroundUri)
+                } else if (callBackgroundBitmap != null) {
+                    Image(
+                        bitmap = callBackgroundBitmap!!,
+                        contentDescription = "Selected call background",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(listOf(Color(0xB90D111B), Color(0x8A0D111B), Color(0xF20D111B)))
+                    )
                 )
             }
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(Color(0xB90D111B), Color(0x8A0D111B), Color(0xF20D111B)))
-                )
-            )
-            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Box(Modifier.fillMaxSize().padding(if (bannerMode) 16.dp else 24.dp), contentAlignment = Alignment.Center) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text("P A N E", color = Color(0xFFB9C5FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(42.dp))
-                Box(Modifier.size(104.dp).clip(CircleShape).background(Color(0xFF293750)), contentAlignment = Alignment.Center) {
+                Spacer(Modifier.height(if (bannerMode) 8.dp else 42.dp))
+                Box(Modifier.size(if (bannerMode) 64.dp else 104.dp).clip(CircleShape).background(Color(0xFF293750)), contentAlignment = Alignment.Center) {
                     if (contactPhotoBitmap != null) {
                         Image(bitmap = contactPhotoBitmap!!, contentDescription = "Caller photo", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     } else {
                         Text(displayName.take(1).uppercase(), color = CallText, fontSize = 38.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
-                Spacer(Modifier.height(22.dp))
-                Text(displayName, color = CallText, fontSize = 25.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(if (bannerMode) 8.dp else 22.dp))
+                Text(displayName, color = CallText, fontSize = if (bannerMode) 20.sp else 25.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2)
                 Text(displayNumber, color = CallMuted, fontSize = 15.sp)
                 Spacer(Modifier.height(12.dp))
                 Text(status, color = CallMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                Spacer(Modifier.height(52.dp))
+                Spacer(Modifier.height(if (bannerMode) 14.dp else 52.dp))
                 if ((active || state == Call.STATE_HOLDING) && !fakeCall) {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         CallAction(if (muted) "Unmute" else "Mute", if (muted) CallAccent else CallCard) { PaneCallController.toggleMute() }
                         CallAction(if (speaker) "Speaker on" else "Speaker", if (speaker) CallAccent else CallCard) { PaneCallController.toggleSpeaker() }
                     }
                     Spacer(Modifier.height(26.dp))
-                    CallAction("End call", CallRed) { PaneCallController.end() }
+                    CallAction("End call", CallRed) { PaneCallController.end(); hostActivity?.finish() }
                 } else if (fakeCall && fakeAnswered.value) {
                     CallAction("End simulated call", CallRed) { hostActivity?.finish() }
                 } else if (ringing) {
                     if (slideToAnswer) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CallAction("Decline", CallRed) { if (fakeCall) hostActivity?.finish() else PaneCallController.reject() }
+                            CallAction("Decline", CallRed) { if (fakeCall) hostActivity?.finish() else { PaneCallController.reject(); hostActivity?.finish() } }
                             Spacer(Modifier.height(18.dp))
                             SlideToAnswer { if (fakeCall) fakeAnswered.value = true else PaneCallController.answer() }
                         }
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                            CallAction("Decline", CallRed) { if (fakeCall) hostActivity?.finish() else PaneCallController.reject() }
+                            CallAction("Decline", CallRed) { if (fakeCall) hostActivity?.finish() else { PaneCallController.reject(); hostActivity?.finish() } }
                             CallAction("Answer", CallAccent) { if (fakeCall) fakeAnswered.value = true else PaneCallController.answer() }
                         }
                     }
@@ -258,10 +293,10 @@ private fun InCallScreen() {
                                 .putExtra("sms_body", message)
                             context.startActivity(smsIntent)
                         }
-                        if (fakeCall) hostActivity?.finish() else PaneCallController.reject()
+                        if (fakeCall) hostActivity?.finish() else { PaneCallController.reject(); hostActivity?.finish() }
                     }
                 } else if (call != null) {
-                    CallAction("End call", CallRed) { PaneCallController.end() }
+                    CallAction("End call", CallRed) { PaneCallController.end(); hostActivity?.finish() }
                 } else {
                     Text("Call screen opens when Android Telecom delivers a call.", color = CallMuted, textAlign = TextAlign.Center)
                 }
