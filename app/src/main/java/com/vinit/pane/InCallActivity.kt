@@ -3,6 +3,7 @@ package com.vinit.pane
 import android.telecom.Call
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -248,6 +249,16 @@ private fun InCallScreen() {
                             CallAction("Decline", CallRed) { if (fakeCall) hostActivity?.finish() else PaneCallController.reject() }
                             CallAction("Answer", CallAccent) { if (fakeCall) fakeAnswered.value = true else PaneCallController.answer() }
                         }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    CallAction("Quick response", CallCard) {
+                        val message = prefs.getString("quick_response", "Can't talk right now.") ?: "Can't talk right now."
+                        runCatching {
+                            val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", displayNumber, null))
+                                .putExtra("sms_body", message)
+                            context.startActivity(smsIntent)
+                        }
+                        if (fakeCall) hostActivity?.finish() else PaneCallController.reject()
                     }
                 } else if (call != null) {
                     CallAction("End call", CallRed) { PaneCallController.end() }
