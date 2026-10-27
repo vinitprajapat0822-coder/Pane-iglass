@@ -16,6 +16,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,6 +51,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -202,6 +209,12 @@ private fun PaneApp(activity: MainActivity) {
     var recents by remember { mutableStateOf(emptyList<Person>()) }
     var recentFilter by remember { mutableStateOf("All") }
     var recentsEditing by remember { mutableStateOf(false) }
+    var glassTarget by remember { mutableStateOf<String?>(null) }
+    val haptics = LocalHapticFeedback.current
+    val showGlass: (String) -> Unit = { label ->
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        glassTarget = label
+    }
     var permissionState by remember { mutableStateOf(false) }
     var defaultDialer by remember { mutableStateOf(activity.isDefaultDialer()) }
     val prefs = remember(activity) { activity.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
@@ -253,7 +266,8 @@ private fun PaneApp(activity: MainActivity) {
             if (useDarkPalette) listOf(Color(0xFF19243A), Night, Color(0xFF101827))
             else listOf(Color(0xFFE8EDF7), Night, Color(0xFFF8FAFD))
         ))) {
-            Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp)) {
+            Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp)
+                .blur(if (glassTarget != null) 8.dp else 0.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("P A N E", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -311,19 +325,22 @@ private fun PaneApp(activity: MainActivity) {
                             dialed = dialed,
                             onDigit = { dialed += it },
                             onDelete = { if (dialed.isNotEmpty()) dialed = dialed.dropLast(1) },
-                            onCall = { activity.openDialer(dialed) }
+                            onCall = { activity.openDialer(dialed) },
+                            onGlassPress = showGlass
                         )
                         PaneTab.Contacts -> PeoplePanel(
                             title = "PHONE CONTACTS",
                             people = contacts.filter { it.name.contains(query, true) || it.number.contains(query, true) },
                             emptyMessage = if (!activity.hasPermission(Manifest.permission.READ_CONTACTS)) "Contacts permission is needed to show phone contacts." else "No matching contacts.",
-                            onCall = activity::openDialer
+                            onCall = activity::openDialer,
+                            onGlassPress = showGlass
                         )
                         PaneTab.Favorites -> PeoplePanel(
                             title = "STARRED CONTACTS",
                             people = contacts.filter { it.starred && (it.name.contains(query, true) || it.number.contains(query, true)) },
                             emptyMessage = if (!activity.hasPermission(Manifest.permission.READ_CONTACTS)) "Allow Contacts permission to load favorites." else "No starred contacts found. Star contacts in your phone's Contacts app.",
-                            onCall = activity::openDialer
+                            onCall = activity::openDialer,
+                            onGlassPress = showGlass
                         )
                         PaneTab.Recents -> RecentsPanel(
                             people = recents.filter { it.name.contains(query, true) || it.number.contains(query, true) }
@@ -333,7 +350,8 @@ private fun PaneApp(activity: MainActivity) {
                             filter = recentFilter,
                             onFilterChange = { recentFilter = it },
                             editing = recentsEditing,
-                            onEditingChange = { recentsEditing = it }
+                            onEditingChange = { recentsEditing = it },
+                            onGlassPress = showGlass
                         )
                         PaneTab.Settings -> SettingsPanel(
                             theme = themeChoice,
@@ -341,7 +359,8 @@ private fun PaneApp(activity: MainActivity) {
                             buttons = buttonsChoice,
                             onButtonsChange = { buttonsChoice = it; prefs.edit().putString("call_buttons", it).apply() },
                             incoming = incomingChoice,
-                            onIncomingChange = { incomingChoice = it; prefs.edit().putString("incoming_style", it).apply() }
+                            onIncomingChange = { incomingChoice = it; prefs.edit().putString("incoming_style", it).apply() },
+                            onGlassPress = showGlass
                         )
                     }
                 }
@@ -376,6 +395,36 @@ private fun PaneApp(activity: MainActivity) {
                     }
                 }
             }
+            if (glassTarget != null) {
+                Box(
+                    Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.24f))
+                        .clickable { glassTarget = null }
+                )
+                AnimatedVisibility(
+                    visible = glassTarget != null,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = slideInVertically(initialOffsetY = { it }, animationSpec = spring(dampingRatio = 0.78f, stiffness = 450f)) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }, animationSpec = spring(dampingRatio = 0.9f, stiffness = 500f)) + fadeOut()
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                            .background(Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0xDD1B2434))))
+                            .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                            .padding(horizontal = 22.dp, vertical = 18.dp)
+                    ) {
+                        Box(Modifier.width(38.dp).height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.65f)).align(Alignment.CenterHorizontally))
+                        Spacer(Modifier.height(18.dp))
+                        Text(glassTarget ?: "Pane", color = Color(0xFF101827), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(5.dp))
+                        Text("LIQUID GLASS · TOUCH FEEDBACK", color = Color(0xFF4F5F79), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                        Spacer(Modifier.height(16.dp))
+                        Text("Pane uses a frosted glass surface for this held item.", color = Color(0xFF26334B), fontSize = 13.sp)
+                        Spacer(Modifier.height(16.dp))
+                        Text("CLOSE", color = Color(0xFF5368BD), fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.End).clickable { glassTarget = null }.padding(8.dp))
+                    }
+                }
+            }
         }
     }
     }
@@ -389,7 +438,8 @@ private fun SettingsPanel(
     buttons: String,
     onButtonsChange: (String) -> Unit,
     incoming: String,
-    onIncomingChange: (String) -> Unit
+    onIncomingChange: (String) -> Unit,
+    onGlassPress: (String) -> Unit
 ) {
     val groups = listOf(
         "PERSONALISATION" to listOf("Call Backgrounds", "Dialer Themes", "Call Buttons"),
@@ -414,7 +464,7 @@ private fun SettingsPanel(
                         Spacer(Modifier.height(7.dp))
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(horizontal = 13.dp)) {
                             group.second.forEach { row ->
-                                Row(Modifier.fillMaxWidth().combinedClickable(onClick = { if (row in switchRows) { val enabled = !(states[row] ?: false); states[row] = enabled; prefs.edit().putBoolean(row, enabled).apply() } else selected = row }, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); selected = row }).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.fillMaxWidth().combinedClickable(onClick = { if (row in switchRows) { val enabled = !(states[row] ?: false); states[row] = enabled; prefs.edit().putBoolean(row, enabled).apply() } else selected = row }, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onGlassPress(row) }).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text(row, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                         val subtitle = when (row) { "Dialer Themes" -> "Current: " + theme; "Call Buttons" -> "Current: " + buttons; "Incoming Call Style" -> incoming; else -> null }
@@ -475,6 +525,7 @@ private fun SettingsPanel(
         }
     }
 }
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RecentsPanel(
     people: List<Person>,
@@ -483,7 +534,8 @@ private fun RecentsPanel(
     filter: String,
     onFilterChange: (String) -> Unit,
     editing: Boolean,
-    onEditingChange: (Boolean) -> Unit
+    onEditingChange: (Boolean) -> Unit,
+    onGlassPress: (String) -> Unit
 ) {
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -519,7 +571,8 @@ private fun RecentsPanel(
                 items(people, key = { it.id + "|" + it.number + "|" + it.type }) { person ->
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel)
-                            .border(1.dp, Line.copy(alpha = 0.8f), RoundedCornerShape(18.dp)).padding(12.dp),
+                            .border(1.dp, Line.copy(alpha = 0.8f), RoundedCornerShape(18.dp))
+                            .combinedClickable(onClick = {}, onLongClick = { onGlassPress(person.name) }).padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -550,13 +603,15 @@ private fun RecentsPanel(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PeoplePanel(
     title: String,
     people: List<Person>,
     emptyMessage: String,
     onCall: (String) -> Unit,
-    showType: Boolean = false
+    showType: Boolean = false,
+    onGlassPress: (String) -> Unit
 ) {
     Column(Modifier.fillMaxSize()) {
         Text(title, color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
@@ -570,7 +625,8 @@ private fun PeoplePanel(
                 items(people, key = { it.id + "|" + it.number + "|" + it.type }) { person ->
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp)).background(Panel)
-                            .border(1.dp, Line.copy(alpha = 0.8f), RoundedCornerShape(19.dp)).padding(12.dp),
+                            .border(1.dp, Line.copy(alpha = 0.8f), RoundedCornerShape(19.dp))
+                            .combinedClickable(onClick = {}, onLongClick = { onGlassPress(person.name) }).padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -598,8 +654,9 @@ private fun PeoplePanel(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun KeypadPanel(dialed: String, onDigit: (String) -> Unit, onDelete: () -> Unit, onCall: () -> Unit) {
+private fun KeypadPanel(dialed: String, onDigit: (String) -> Unit, onDelete: () -> Unit, onCall: () -> Unit, onGlassPress: (String) -> Unit) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(if (dialed.isBlank()) "Enter a number" else dialed, color = Ink, fontSize = 24.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
@@ -609,7 +666,7 @@ private fun KeypadPanel(dialed: String, onDigit: (String) -> Unit, onDelete: () 
                 row.forEach { key ->
                     Box(
                         Modifier.size(60.dp).clip(CircleShape).background(Panel).border(1.dp, Line, CircleShape)
-                            .clickable { onDigit(key) }, contentAlignment = Alignment.Center
+                            .combinedClickable(onClick = { onDigit(key) }, onLongClick = { onGlassPress("Key $key") }), contentAlignment = Alignment.Center
                     ) { Text(key, color = Ink, fontSize = 23.sp, fontWeight = FontWeight.Medium) }
                 }
             }
