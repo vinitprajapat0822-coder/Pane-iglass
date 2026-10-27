@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -58,7 +59,7 @@ private val Accent = Color(0xFFB9C5FF)
 private val CallGreen = Color(0xFF39D98A)
 
 private enum class PaneTab(val label: String) {
-    Favorites("Favorites"), Recents("Recents"), Contacts("Contacts"), Keypad("Keypad")
+    Favorites("Favorites"), Recents("Recents"), Contacts("Contacts"), Keypad("Keypad"), Settings("Settings")
 }
 
 internal data class Person(
@@ -215,6 +216,7 @@ private fun PaneApp(activity: MainActivity) {
                                 PaneTab.Recents -> "Recent calls"
                                 PaneTab.Contacts -> "Contacts"
                                 PaneTab.Keypad -> "Keypad"
+                                PaneTab.Settings -> "Settings"
                             }, color = Ink, fontSize = 28.sp, fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -283,6 +285,7 @@ private fun PaneApp(activity: MainActivity) {
                             onCall = activity::openDialer,
                             showType = true
                         )
+                        PaneTab.Settings -> SettingsPanel()
                     }
                 }
 
@@ -306,6 +309,7 @@ private fun PaneApp(activity: MainActivity) {
                                     PaneTab.Recents -> Icons.Default.History
                                     PaneTab.Contacts -> Icons.Default.Contacts
                                     PaneTab.Keypad -> Icons.Default.Keyboard
+                                    PaneTab.Settings -> Icons.Default.Settings
                                 }, contentDescription = tab.label,
                                 tint = if (active) Accent else Muted, modifier = Modifier.size(20.dp)
                             )
@@ -319,6 +323,70 @@ private fun PaneApp(activity: MainActivity) {
     }
 }
 
+@Composable
+private fun SettingsPanel() {
+    val groups = listOf(
+        "PERSONALISATION" to listOf("Call Backgrounds", "Dialer Themes", "Call Buttons"),
+        "TOOLS" to listOf("Call Announcer", "Flash On Call", "Fake Call"),
+        "GENERAL" to listOf("Call Back Screen", "Contact Photo on Call", "Enable DTMF Tone", "SIM Preference", "Accessibility", "Default Launch Screen", "Voicemail", "Sound & Vibration", "Speed Dial", "Incoming Call Style", "Call Blocker", "Quick Response", "Language", "Call Settings"),
+        "OTHER" to listOf("Help & FAQ", "Rate App", "Privacy Policy")
+    )
+    val switchRows = setOf("Call Announcer", "Flash On Call", "Contact Photo on Call", "Enable DTMF Tone")
+    val states = remember { mutableStateMapOf<String, Boolean>() }
+    var selected by remember { mutableStateOf<String?>(null) }
+    var theme by remember { mutableStateOf("System") }
+    var buttons by remember { mutableStateOf("Classic") }
+    var incoming by remember { mutableStateOf("Fullscreen") }
+    Column(Modifier.fillMaxSize()) {
+        Text("Settings", color = Muted, fontSize = 12.sp)
+        Spacer(Modifier.height(8.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+            groups.forEach { group ->
+                item {
+                    Column {
+                        Text(group.first, color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                        Spacer(Modifier.height(7.dp))
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(horizontal = 13.dp)) {
+                            group.second.forEach { row ->
+                                Row(Modifier.fillMaxWidth().clickable { if (row in switchRows) states[row] = !(states[row] ?: false) else selected = row }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(row, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                        val subtitle = when (row) { "Dialer Themes" -> "Current: " + theme; "Call Buttons" -> "Current: " + buttons; "Incoming Call Style" -> incoming; else -> null }
+                                        if (subtitle != null) Text(subtitle, color = Muted, fontSize = 11.sp)
+                                    }
+                                    if (row in switchRows) {
+                                        val enabled = states[row] == true
+                                        Box(Modifier.width(38.dp).height(23.dp).clip(CircleShape).background(if (enabled) CallGreen else Color(0xFF46536A)).padding(3.dp), contentAlignment = if (enabled) Alignment.CenterEnd else Alignment.CenterStart) { Box(Modifier.size(17.dp).clip(CircleShape).background(Color.White)) }
+                                    } else Text("›", color = Muted, fontSize = 23.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (selected != null) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { selected = null }) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color(0xFF202B3F)).border(1.dp, Line, RoundedCornerShape(24.dp)).padding(18.dp)) {
+                Text(selected ?: "", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                when (selected) {
+                    "Dialer Themes" -> listOf("System", "Dark", "Light").forEach { option -> Text((if (theme == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { theme = option; selected = null }.padding(12.dp)) }
+                    "Call Buttons" -> listOf("Classic dual buttons", "Slide to answer").forEach { option -> Text((if (buttons == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { buttons = option; selected = null }.padding(12.dp)) }
+                    "Incoming Call Style" -> listOf("Banner", "Fullscreen").forEach { option -> Text((if (incoming == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { incoming = option; selected = null }.padding(12.dp)) }
+                    "Call Backgrounds" -> Text("Photo/video call background selection is not connected yet.", color = Muted)
+                    "Fake Call" -> Text("Fake call simulation is not connected yet; no real call will be placed.", color = Muted)
+                    "Flash On Call" -> Text("Flashlight hardware integration is not connected yet.", color = Muted)
+                    "Privacy Policy" -> Text("Pane has no account backend. Contacts and call log are accessed locally after permission.", color = Muted)
+                    else -> Text("This option is listed. Device integration must be implemented before it can change system behavior.", color = Muted)
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("CLOSE", color = Accent, modifier = Modifier.align(Alignment.End).clickable { selected = null }.padding(8.dp))
+            }
+        }
+    }
+}
 @Composable
 private fun PeoplePanel(
     title: String,
