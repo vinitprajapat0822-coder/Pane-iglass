@@ -36,6 +36,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -167,6 +169,19 @@ private fun PaneApp(activity: MainActivity) {
     var contacts by remember { mutableStateOf(emptyList<Person>()) }
     var recents by remember { mutableStateOf(emptyList<Person>()) }
     var permissionState by remember { mutableStateOf(false) }
+    var defaultDialer by remember { mutableStateOf(activity.isDefaultDialer()) }
+
+    DisposableEffect(activity) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                defaultDialer = activity.isDefaultDialer()
+                contacts = activity.readContacts()
+                recents = activity.readRecents()
+            }
+        }
+        activity.lifecycle.addObserver(observer)
+        onDispose { activity.lifecycle.removeObserver(observer) }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -207,7 +222,7 @@ private fun PaneApp(activity: MainActivity) {
                 }
 
                 Spacer(Modifier.height(12.dp))
-                if (!activity.isDefaultDialer()) {
+                if (!defaultDialer) {
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF27354B))
                             .border(1.dp, Line, RoundedCornerShape(16.dp))
