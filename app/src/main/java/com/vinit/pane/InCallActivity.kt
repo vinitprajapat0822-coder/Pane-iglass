@@ -28,6 +28,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.animation.core.Animatable
@@ -80,17 +81,24 @@ private fun InCallScreen() {
     val state by remember { derivedStateOf { PaneCallController.state } }
     val name by remember { derivedStateOf { PaneCallController.displayName } }
     val number by remember { derivedStateOf { PaneCallController.number } }
+    val hostActivity = context as? InCallActivity
+    val fakeCall = remember(hostActivity) { hostActivity?.intent?.getBooleanExtra("pane_fake_call", false) == true }
+    val fakeName = remember(hostActivity) { hostActivity?.intent?.getStringExtra("pane_fake_name").orEmpty().ifBlank { "Unknown caller" } }
+    val fakeNumber = remember(hostActivity) { hostActivity?.intent?.getStringExtra("pane_fake_number").orEmpty() }
+    val fakeAnswered = remember { mutableStateOf(false) }
+    val displayName = if (fakeCall) fakeName else name
+    val displayNumber = if (fakeCall) fakeNumber else number
     val muted by remember { derivedStateOf { PaneCallController.muted } }
     val speaker by remember { derivedStateOf { PaneCallController.speaker } }
-    val ringing = state == Call.STATE_RINGING
-    DisposableEffect(announceCaller, ringing, name, number) {
+    val ringing = state == Call.STATE_RINGING || (fakeCall && !fakeAnswered.value)
+    DisposableEffect(announceCaller, ringing, displayName, displayNumber) {
         var engine: TextToSpeech? = null
         if (announceCaller && ringing) {
             engine = TextToSpeech(context) { result ->
                 if (result == TextToSpeech.SUCCESS) {
                     engine?.let { tts ->
                         tts.language = Locale.getDefault()
-                        val caller = if (name.isBlank() || name == number) number else name
+                        val caller = if (displayName.isBlank() || displayName == displayNumber) displayNumber else displayName
                         tts.speak("Incoming call from $caller", TextToSpeech.QUEUE_FLUSH, null, "pane-caller-announcement")
                     }
                 }
@@ -125,8 +133,10 @@ private fun InCallScreen() {
             }
         }
     }
-    val active = state == Call.STATE_ACTIVE
-    val status = when (state) {
+    val active = state == Call.STATE_ACTIVE || (fakeCall && fakeAnswered.value)
+    val status = if (fakeCall) {
+        if (fakeAnswered.value) "SIMULATED CALL ACTIVE" else "SIMULATED INCOMING CALL"
+    } else when (state) {
         Call.STATE_RINGING -> "INCOMING CALL"
         Call.STATE_DIALING -> "CALLING…"
         Call.STATE_CONNECTING -> "CONNECTING…"
@@ -142,32 +152,34 @@ private fun InCallScreen() {
                 Text("P A N E", color = Color(0xFFB9C5FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(42.dp))
                 Box(Modifier.size(104.dp).clip(CircleShape).background(Color(0xFF293750)), contentAlignment = Alignment.Center) {
-                    Text(name.take(1).uppercase(), color = CallText, fontSize = 38.sp, fontWeight = FontWeight.SemiBold)
+                    Text(displayName.take(1).uppercase(), color = CallText, fontSize = 38.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.height(22.dp))
-                Text(name, color = CallText, fontSize = 25.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-                Text(number, color = CallMuted, fontSize = 15.sp)
+                Text(displayName, color = CallText, fontSize = 25.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                Text(displayNumber, color = CallMuted, fontSize = 15.sp)
                 Spacer(Modifier.height(12.dp))
                 Text(status, color = CallMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                 Spacer(Modifier.height(52.dp))
-                if (active || state == Call.STATE_HOLDING) {
+                if ((active || state == Call.STATE_HOLDING) && !fakeCall) {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         CallAction(if (muted) "Unmute" else "Mute", if (muted) CallAccent else CallCard) { PaneCallController.toggleMute() }
                         CallAction(if (speaker) "Speaker on" else "Speaker", if (speaker) CallAccent else CallCard) { PaneCallController.toggleSpeaker() }
                     }
                     Spacer(Modifier.height(26.dp))
                     CallAction("End call", CallRed) { PaneCallController.end() }
+                } else if (fakeCall && fakeAnswered.value) {
+                    CallAction("End simulated call", CallRed) { hostActivity?.finish() }
                 } else if (ringing) {
                     if (slideToAnswer) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CallAction("Decline", CallRed) { PaneCallController.reject() }
+                            CallAction("Decline", CallRed) { if (fakeCall) hostActivity?.finish() else PaneCallController.reject() }
                             Spacer(Modifier.height(18.dp))
-                            SlideToAnswer { PaneCallController.answer() }
+                            SlideToAnswer { if (fakeCall) fakeAnswered.value = true else PaneCallController.answer() }
                         }
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                            CallAction("Decline", CallRed) { PaneCallController.reject() }
-                            CallAction("Answer", CallAccent) { PaneCallController.answer() }
+                            CallAction("Decline", CallRed) { if (fakeCall) hostActivity?.finish() else PaneCallController.reject() }
+                            CallAction("Answer", CallAccent) { if (fakeCall) fakeAnswered.value = true else PaneCallController.answer() }
                         }
                     }
                 } else if (call != null) {
