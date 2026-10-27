@@ -19,6 +19,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -41,11 +43,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.produceState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -131,9 +139,16 @@ class InCallActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun InCallScreen() {
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    var glassTarget by remember { mutableStateOf<String?>(null) }
+    val showGlass: (String) -> Unit = { label ->
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        glassTarget = label
+    }
     val prefs = remember(context) { context.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
     val slideToAnswer = prefs.getString("call_buttons", "Classic dual buttons") == "Slide to answer"
     val announceCaller = prefs.getBoolean("Call Announcer", false)
@@ -251,6 +266,7 @@ private fun InCallScreen() {
                 else Modifier.background(CallBg)
             )
         ) {
+            Box(Modifier.fillMaxSize().blur(if (glassTarget != null) 8.dp else 0.dp)) {
             if (!bannerMode) {
                 if (backgroundType == "video" && !backgroundUri.isNullOrBlank()) {
                     LoopingVideoBackground(backgroundUri)
@@ -287,28 +303,28 @@ private fun InCallScreen() {
                 Spacer(Modifier.height(if (bannerMode) 14.dp else 52.dp))
                 if ((active || state == Call.STATE_HOLDING) && !fakeCall) {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        CallAction(if (muted) "Unmute" else "Mute", if (muted) CallAccent else CallCard) { PaneCallController.toggleMute() }
-                        CallAction(if (speaker) "Speaker on" else "Speaker", if (speaker) CallAccent else CallCard) { PaneCallController.toggleSpeaker() }
+                        CallAction(if (muted) "Unmute" else "Mute", if (muted) CallAccent else CallCard, onLongPress = { showGlass(if (muted) "Unmute" else "Mute") }) { PaneCallController.toggleMute() }
+                        CallAction(if (speaker) "Speaker on" else "Speaker", if (speaker) CallAccent else CallCard, onLongPress = { showGlass("Speaker control") }) { PaneCallController.toggleSpeaker() }
                     }
                     Spacer(Modifier.height(26.dp))
-                    CallAction("End call", CallRed) { PaneCallController.end(); hostActivity?.finish() }
+                    CallAction("End call", CallRed, onLongPress = { showGlass("End call") }) { PaneCallController.end(); hostActivity?.finish() }
                 } else if (fakeCall && fakeAnswered.value) {
-                    CallAction("End simulated call", CallRed) { hostActivity?.finish() }
+                    CallAction("End simulated call", CallRed, onLongPress = { showGlass("End simulated call") }) { hostActivity?.finish() }
                 } else if (ringing) {
                     if (slideToAnswer) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CallAction("Decline", CallRed) { if (fakeCall) hostActivity?.finish() else { PaneCallController.reject(); hostActivity?.finish() } }
+                            CallAction("Decline", CallRed, onLongPress = { showGlass("Decline call") }) { if (fakeCall) hostActivity?.finish() else { PaneCallController.reject(); hostActivity?.finish() } }
                             Spacer(Modifier.height(18.dp))
                             SlideToAnswer { if (fakeCall) fakeAnswered.value = true else PaneCallController.answer() }
                         }
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                            CallAction("Decline", CallRed) { if (fakeCall) hostActivity?.finish() else { PaneCallController.reject(); hostActivity?.finish() } }
-                            CallAction("Answer", CallAccent) { if (fakeCall) fakeAnswered.value = true else PaneCallController.answer() }
+                            CallAction("Decline", CallRed, onLongPress = { showGlass("Decline call") }) { if (fakeCall) hostActivity?.finish() else { PaneCallController.reject(); hostActivity?.finish() } }
+                            CallAction("Answer", CallAccent, onLongPress = { showGlass("Answer call") }) { if (fakeCall) fakeAnswered.value = true else PaneCallController.answer() }
                         }
                     }
                     Spacer(Modifier.height(14.dp))
-                    CallAction("Quick response", CallCard) {
+                    CallAction("Quick response", CallCard, onLongPress = { showGlass("Quick response") }) {
                         val message = prefs.getString("quick_response", "Can't talk right now.") ?: "Can't talk right now."
                         runCatching {
                             val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", displayNumber, null))
@@ -318,10 +334,38 @@ private fun InCallScreen() {
                         if (fakeCall) hostActivity?.finish() else { PaneCallController.reject(); hostActivity?.finish() }
                     }
                 } else if (call != null) {
-                    CallAction("End call", CallRed) { PaneCallController.end(); hostActivity?.finish() }
+                    CallAction("End call", CallRed, onLongPress = { showGlass("End call") }) { PaneCallController.end(); hostActivity?.finish() }
                 } else {
                     Text("Call screen opens when Android Telecom delivers a call.", color = CallMuted, textAlign = TextAlign.Center)
                 }
+                }
+            }
+            }
+            if (glassTarget != null) {
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f)).clickable { glassTarget = null })
+                AnimatedVisibility(
+                    visible = glassTarget != null,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = slideInVertically(initialOffsetY = { it }, animationSpec = spring(dampingRatio = 0.78f, stiffness = 450f)) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }, animationSpec = spring(dampingRatio = 0.9f, stiffness = 500f)) + fadeOut()
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                            .background(Brush.verticalGradient(listOf(Color(0xF5FFFFFF), Color(0xE8202C42), Color(0xF0111723))))
+                            .border(1.dp, Color.White.copy(alpha = 0.45f), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                            .padding(horizontal = 22.dp, vertical = 18.dp)
+                    ) {
+                        Box(Modifier.width(38.dp).height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.7f)).align(Alignment.CenterHorizontally))
+                        Spacer(Modifier.height(16.dp))
+                        Text(glassTarget ?: "Pane", color = Color(0xFF101827), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(5.dp))
+                        Text("LIQUID GLASS · HAPTIC FEEDBACK", color = Color(0xFF54627B), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
+                        Spacer(Modifier.height(14.dp))
+                        Text("Held control · translucent glass surface", color = Color(0xFF26334B), fontSize = 13.sp)
+                        Spacer(Modifier.height(14.dp))
+                        Text("CLOSE", color = Color(0xFF5368BD), fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.End).clickable { glassTarget = null }.padding(8.dp))
+                    }
                 }
             }
         }
@@ -392,10 +436,27 @@ private fun SlideToAnswer(onAnswer: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CallAction(label: String, color: Color, onClick: () -> Unit) {
-    Box(Modifier.clip(RoundedCornerShape(20.dp)).background(color).clickable(onClick = onClick)
-        .padding(horizontal = 22.dp, vertical = 16.dp), contentAlignment = Alignment.Center) {
+private fun CallAction(
+    label: String,
+    color: Color,
+    onLongPress: (() -> Unit)? = null,
+    onClick: () -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
+    Box(
+        Modifier.clip(RoundedCornerShape(20.dp)).background(color)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongPress?.invoke()
+                }
+            )
+            .padding(horizontal = 22.dp, vertical = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Text(label, color = if (color == CallAccent) CallBg else CallText, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
     }
 }
