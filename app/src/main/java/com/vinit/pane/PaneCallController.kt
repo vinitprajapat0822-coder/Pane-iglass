@@ -18,6 +18,12 @@ object PaneCallController {
         private set
     var number by mutableStateOf("")
         private set
+    var lastEndedName by mutableStateOf("")
+        private set
+    var lastEndedNumber by mutableStateOf("")
+        private set
+    var callEndSequence by mutableStateOf(0)
+        private set
     var muted by mutableStateOf(false)
         private set
     var speaker by mutableStateOf(false)
@@ -57,6 +63,9 @@ object PaneCallController {
 
     private fun clearIfCurrent(target: Call) {
         if (call === target) {
+            lastEndedName = displayName
+            lastEndedNumber = number
+            callEndSequence += 1
             call = null
             state = Call.STATE_DISCONNECTED
             displayName = "Phone call"
