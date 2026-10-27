@@ -78,6 +78,28 @@ private val CallMuted = Color(0xFFADB8D0)
 private val CallAccent = Color(0xFF39D98A)
 private val CallRed = Color(0xFFFF667A)
 
+private fun decodeCallImage(
+    context: Context,
+    uri: Uri,
+    maxDimension: Int = 1440
+): androidx.compose.ui.graphics.ImageBitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    runCatching {
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > maxDimension || bounds.outHeight / sampleSize > maxDimension) {
+        sampleSize *= 2
+    }
+    val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    return runCatching {
+        context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, options)?.asImageBitmap()
+        }
+    }.getOrNull()
+}
+
 class InCallActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -134,7 +156,7 @@ private fun InCallScreen() {
         value = if (backgroundUri != null && backgroundType != "video") {
             withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.openInputStream(Uri.parse(backgroundUri))?.use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
+                    decodeCallImage(context, Uri.parse(backgroundUri))
                 }.getOrNull()
             }
         } else null
@@ -155,7 +177,7 @@ private fun InCallScreen() {
         value = if (!contactPhotoUri.isNullOrBlank()) {
             withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.openInputStream(Uri.parse(contactPhotoUri))?.use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
+                    decodeCallImage(context, Uri.parse(contactPhotoUri))
                 }.getOrNull()
             }
         } else null
