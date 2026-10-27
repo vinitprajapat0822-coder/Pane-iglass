@@ -85,6 +85,12 @@ class MainActivity : ComponentActivity() {
         DialerRoleHelper.createRequestIntent(this)?.let { startActivity(it) }
     }
 
+    fun isDefaultDialer(): Boolean = DialerRoleHelper.isDefaultDialer(this)
+
+    fun requestDefaultDialer() {
+        DialerRoleHelper.createRequestIntent(this)?.let { startActivity(it) }
+    }
+
     fun readContacts(): List<Person> {
         if (!hasPermission(Manifest.permission.READ_CONTACTS)) return emptyList()
         val result = mutableListOf<Person>()
