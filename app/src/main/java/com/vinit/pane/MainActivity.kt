@@ -517,6 +517,34 @@ private fun PaneApp(activity: MainActivity) {
     }
 }
 
+
+private fun settingGlyph(label: String): String = when (label) {
+    "Call Backgrounds" -> "◌"
+    "Dialer Themes" -> "✧"
+    "Call Buttons" -> "⇄"
+    "Call Announcer" -> "♫"
+    "Flash On Call" -> "ϟ"
+    "Fake Call" -> "☎"
+    "Call Back Screen" -> "↩"
+    "Contact Photo on Call" -> "◎"
+    "Enable DTMF Tone" -> "♪"
+    "SIM Preference" -> "▥"
+    "Accessibility" -> "◉"
+    "Default Launch Screen" -> "⌂"
+    "Voicemail" -> "▣"
+    "Sound & Vibration" -> "≋"
+    "Speed Dial" -> "1"
+    "Incoming Call Style" -> "▱"
+    "Call Blocker" -> "⊘"
+    "Quick Response" -> "↗"
+    "Language" -> "文"
+    "Call Settings" -> "⚙"
+    "Help & FAQ" -> "?"
+    "Rate App" -> "★"
+    "Privacy Policy" -> "⌑"
+    else -> "·"
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SettingsPanel(
@@ -539,6 +567,10 @@ private fun SettingsPanel(
     val prefs = remember(context) { context.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
     val states = remember(prefs) { mutableStateMapOf<String, Boolean>().apply { switchRows.forEach { this[it] = prefs.getBoolean(it, false) } } }
     var selected by remember { mutableStateOf<String?>(null) }
+    var speedDialNumber by remember { mutableStateOf("") }
+    var blockNumber by remember { mutableStateOf("") }
+    var blockedNumbers by remember { mutableStateOf(prefs.getStringSet("blocked_numbers", emptySet()).orEmpty().toSet()) }
+    var callbackEnabled by remember(selected) { mutableStateOf(prefs.getBoolean("Call Back Screen", true)) }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             states["Flash On Call"] = true
@@ -571,8 +603,9 @@ private fun SettingsPanel(
                     Column {
                         Text(group.first, color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                         Spacer(Modifier.height(7.dp))
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(horizontal = 13.dp)) {
-                            group.second.forEach { row ->
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel)
+                            .border(1.dp, Line.copy(alpha = 0.92f), RoundedCornerShape(20.dp)).padding(horizontal = 13.dp)) {
+                            group.second.forEachIndexed { rowIndex, row ->
                                 Row(Modifier.fillMaxWidth().combinedClickable(
                                     onClick = {
                                         if (row in switchRows) {
@@ -589,8 +622,17 @@ private fun SettingsPanel(
                                     },
                                     onLongClick = { onGlassPress(row) }
                                 ).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        Modifier.size(35.dp).clip(RoundedCornerShape(12.dp))
+                                            .background(Accent.copy(alpha = if (theme == "Light") 0.11f else 0.15f))
+                                            .border(1.dp, Accent.copy(alpha = 0.14f), RoundedCornerShape(12.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(settingGlyph(row), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Spacer(Modifier.width(11.dp))
                                     Column(Modifier.weight(1f)) {
-                                        Text(row, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                        Text(row, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.05.sp)
                                         val subtitle = when (row) { "Dialer Themes" -> "Current: " + theme; "Call Buttons" -> "Current: " + buttons; "Incoming Call Style" -> incoming; else -> null }
                                         if (subtitle != null) Text(subtitle, color = Muted, fontSize = 11.sp)
                                     }
@@ -598,6 +640,9 @@ private fun SettingsPanel(
                                         val enabled = states[row] == true
                                         Box(Modifier.width(38.dp).height(23.dp).clip(CircleShape).background(if (enabled) CallGreen else Color(0xFF46536A)).padding(3.dp), contentAlignment = if (enabled) Alignment.CenterEnd else Alignment.CenterStart) { Box(Modifier.size(17.dp).clip(CircleShape).background(Color.White)) }
                                     } else Text("›", color = Muted, fontSize = 23.sp)
+                                }
+                                if (rowIndex < group.second.lastIndex) {
+                                    Spacer(Modifier.padding(start = 46.dp).fillMaxWidth().height(1.dp).background(Line.copy(alpha = 0.36f)))
                                 }
                             }
                         }
@@ -678,9 +723,140 @@ private fun SettingsPanel(
                             }.padding(10.dp)
                         )
                     }
-                    "Flash On Call" -> Text("Flashlight hardware integration is not connected yet.", color = Muted)
-                    "Privacy Policy" -> Text("Pane has no account backend. Contacts and call log are accessed locally after permission.", color = Muted)
-                    else -> Text("This option is listed. Device integration must be implemented before it can change system behavior.", color = Muted)
+                    "Default Launch Screen" -> listOf("Favourites", "Recents", "Contacts", "Keypad", "Settings").forEach { option ->
+                        val tabName = when (option) { "Favourites" -> "Favorites"; else -> option }
+                        Text((if (prefs.getString("default_launch_screen", "Favorites") == tabName) "✓  " else "    ") + option, color = Ink,
+                            modifier = Modifier.fillMaxWidth().combinedClickable(
+                                onClick = { prefs.edit().putString("default_launch_screen", tabName).apply(); selected = null },
+                                onLongClick = { onGlassPress("Launch screen: $option") }
+                            ).padding(vertical = 12.dp))
+                    }
+                    "SIM Preference" -> {
+                        Text("Choose the SIM/account preferred when opening Android's system dialer.", color = Muted, fontSize = 12.sp)
+                        val telecom = context.getSystemService(TelecomManager::class.java)
+                        val accounts = telecom?.callCapablePhoneAccounts.orEmpty()
+                        val preferredId = prefs.getString("preferred_phone_account_id", null)
+                        if (accounts.isEmpty()) Text("Android did not report a call-capable SIM account.", color = Muted, fontSize = 12.sp)
+                        accounts.forEach { handle ->
+                            val label = telecom?.getPhoneAccount(handle)?.label?.toString().orEmpty().ifBlank { handle.id }
+                            Text((if (handle.id == preferredId) "✓  " else "    ") + label, color = Ink,
+                                modifier = Modifier.fillMaxWidth().combinedClickable(
+                                    onClick = {
+                                        prefs.edit().putString("preferred_phone_account_id", handle.id)
+                                            .putString("preferred_phone_account_component", handle.componentName.flattenToString()).apply()
+                                        selected = null
+                                    }, onLongClick = { onGlassPress("Preferred SIM: $label") }
+                                ).padding(vertical = 12.dp))
+                        }
+                        Text("Android or the carrier dialer may still show its own SIM confirmation.", color = Muted, fontSize = 11.sp)
+                    }
+                    "Accessibility" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Open Android accessibility settings for screen readers, magnification and other assistive options.", color = Muted, fontSize = 12.sp)
+                        Text("OPEN ACCESSIBILITY SETTINGS  ↗", color = Accent, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { runCatching { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }.padding(vertical = 12.dp))
+                    }
+                    "Call Settings", "Voicemail" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(if (selected == "Voicemail") "Voicemail setup varies by SIM operator. Open system phone settings to configure the number and alerts." else "Open Android phone settings. Available options depend on the carrier and installed phone service.", color = Muted, fontSize = 12.sp)
+                        Text("OPEN PHONE SETTINGS  ↗", color = Accent, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { runCatching { context.startActivity(Intent(Settings.ACTION_CALL_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }.padding(vertical = 12.dp))
+                    }
+                    "Sound & Vibration" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Call sound", "Vibration").forEach { feature ->
+                            val key = "sound_vibration_$feature"
+                            val enabled = prefs.getBoolean(key, true)
+                            Text((if (enabled) "●  ON  ·  " else "○  OFF ·  ") + feature, color = Ink,
+                                modifier = Modifier.fillMaxWidth().combinedClickable(
+                                    onClick = { prefs.edit().putBoolean(key, !enabled).apply(); selected = "Sound & Vibration" },
+                                    onLongClick = { onGlassPress(feature) }
+                                ).padding(vertical = 10.dp))
+                        }
+                        Text("Saved preferences only; Android remains responsible for actual call audio routing.", color = Muted, fontSize = 11.sp)
+                    }
+                    "Call Back Screen" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(if (callbackEnabled) "✓  Callback shortcut enabled" else "○  Callback shortcut disabled", color = Ink,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                callbackEnabled = !callbackEnabled
+                                prefs.edit().putBoolean("Call Back Screen", callbackEnabled).apply()
+                            }.padding(vertical = 10.dp))
+                        Text("This option saves locally; callback actions still open Android's dialer for confirmation.", color = Muted, fontSize = 11.sp)
+                    }
+                    "Speed Dial" -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Enter a number, then select a slot to save it.", color = Muted, fontSize = 12.sp)
+                        BasicTextField(value = speedDialNumber, onValueChange = { speedDialNumber = it.take(40) }, singleLine = true,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Night).padding(12.dp),
+                            textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
+                            decorationBox = { inner -> if (speedDialNumber.isBlank()) Text("Phone number", color = Muted, fontSize = 13.sp); inner() })
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            (1..5).forEach { slot ->
+                                Box(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Accent.copy(alpha = 0.15f))
+                                    .combinedClickable(onClick = {
+                                        if (speedDialNumber.isNotBlank()) {
+                                            prefs.edit().putString("speed_dial_$slot", speedDialNumber.trim()).apply()
+                                            speedDialNumber = ""; selected = null
+                                        }
+                                    }, onLongClick = { onGlassPress("Speed dial slot $slot") }).padding(vertical = 11.dp), contentAlignment = Alignment.Center) {
+                                    Text("$slot", color = Ink, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        Text("Stored locally. System-dialer quick shortcuts are controlled by Android.", color = Muted, fontSize = 11.sp)
+                    }
+                    "Call Blocker" -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Manage numbers in Pane's local block list. Automatic rejection is only possible while Pane is the active default phone app.", color = Muted, fontSize = 12.sp)
+                        BasicTextField(value = blockNumber, onValueChange = { blockNumber = it.take(40) }, singleLine = true,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Night).padding(12.dp),
+                            textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
+                            decorationBox = { inner -> if (blockNumber.isBlank()) Text("Number to block", color = Muted, fontSize = 13.sp); inner() })
+                        Text("ADD TO BLOCK LIST", color = Accent, fontWeight = FontWeight.Bold, modifier = Modifier.clickable {
+                            val number = blockNumber.filter { it.isDigit() || it == '+' }
+                            if (number.isNotBlank()) {
+                                blockedNumbers = blockedNumbers + number
+                                prefs.edit().putStringSet("blocked_numbers", blockedNumbers).apply()
+                                blockNumber = ""
+                            }
+                        }.padding(vertical = 8.dp))
+                        if (blockedNumbers.isEmpty()) Text("No numbers added yet.", color = Muted, fontSize = 12.sp)
+                        blockedNumbers.forEach { number ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(number, color = Ink, modifier = Modifier.weight(1f))
+                                Text("REMOVE", color = Color(0xFFFF7A86), fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable {
+                                        blockedNumbers = blockedNumbers - number
+                                        prefs.edit().putStringSet("blocked_numbers", blockedNumbers).apply()
+                                    }.padding(6.dp))
+                            }
+                        }
+                    }
+                    "Quick Response" -> listOf("Can't talk right now.", "I'll call you back soon.", "Please message me.", "I'm busy at the moment.").forEach { message ->
+                        Text((if (prefs.getString("quick_response", "") == message) "✓  " else "    ") + message, color = Ink,
+                            modifier = Modifier.fillMaxWidth().combinedClickable(
+                                onClick = { prefs.edit().putString("quick_response", message).apply(); selected = null },
+                                onLongClick = { onGlassPress("Quick response selected") }
+                            ).padding(vertical = 12.dp))
+                    }
+                    "Language" -> listOf("System default", "English", "हिन्दी").forEach { option ->
+                        Text((if (prefs.getString("app_language", "System default") == option) "✓  " else "    ") + option, color = Ink,
+                            modifier = Modifier.fillMaxWidth().combinedClickable(
+                                onClick = { prefs.edit().putString("app_language", option).apply(); selected = null },
+                                onLongClick = { onGlassPress("Preferred language: $option") }
+                            ).padding(vertical = 12.dp))
+                    }
+                    "Help & FAQ" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Contacts and call history are read locally after Android permissions are granted. Pane opens the Android dialer for outgoing calls. Default-phone privileges must be approved in the system prompt.", color = Muted, fontSize = 12.sp)
+                        Text("No account, subscription, advertising SDK or backend is included.", color = Ink, fontSize = 12.sp)
+                    }
+                    "Rate App" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("The Play Store listing will be available after publication.", color = Muted, fontSize = 12.sp)
+                        Text("OPEN STORE PAGE  ↗", color = Accent, fontWeight = FontWeight.Bold, modifier = Modifier.clickable {
+                            val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=\${context.packageName}"))
+                            runCatching { context.startActivity(market) }.onFailure {
+                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=\${context.packageName}"))) }
+                            }
+                        }.padding(vertical = 12.dp))
+                    }
+                    "Privacy Policy" -> Text("Pane has no account backend. Contacts and call history are accessed locally after permission. Settings are stored on device. Calls are handed to Android's system dialer for confirmation.", color = Muted)
+                    "Flash On Call" -> Text("The flashlight blinks while an incoming call is ringing when camera permission and compatible flash hardware are available.", color = Muted)
+                    else -> Text("This setting is listed but its system-level behaviour still needs implementation or device verification.", color = Muted)
                 }
                 Spacer(Modifier.height(12.dp))
                 Text("CLOSE", color = Accent, modifier = Modifier.align(Alignment.End).clickable { selected = null }.padding(8.dp))
