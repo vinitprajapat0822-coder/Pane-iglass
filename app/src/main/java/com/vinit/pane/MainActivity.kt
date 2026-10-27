@@ -12,6 +12,9 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.CallLog
 import android.provider.ContactsContract
+import android.provider.Settings
+import android.media.AudioManager
+import android.media.ToneGenerator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -53,12 +56,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalTextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,7 +100,7 @@ private val Accent: Color @Composable get() = LocalPanePalette.current.accent
 private val CallGreen: Color @Composable get() = LocalPanePalette.current.callGreen
 
 private enum class PaneTab(val label: String) {
-    Favorites("Favorites"), Recents("Recents"), Contacts("Contacts"), Keypad("Keypad"), Settings("Settings")
+    Favorites("Favourites"), Recents("Recents"), Contacts("Contacts"), Keypad("Keypad"), Settings("Settings")
 }
 
 internal data class Person(
@@ -111,9 +117,46 @@ internal data class Person(
 }
 
 class MainActivity : ComponentActivity() {
+    private val dtmfTone = ToneGenerator(AudioManager.STREAM_DTMF, 72)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme { PaneApp(this) } }
+        setContent {
+            MaterialTheme {
+                CompositionLocalProvider(
+                    LocalTextStyle provides MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = FontFamily.SansSerif,
+                        letterSpacing = 0.12.sp,
+                        lineHeight = 20.sp
+                    )
+                ) { PaneApp(this) }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        runCatching { dtmfTone.release() }
+        super.onDestroy()
+    }
+
+    fun playDtmf(digit: String) {
+        if (!getSharedPreferences("pane_settings", Context.MODE_PRIVATE).getBoolean("Enable DTMF Tone", false)) return
+        val tone = when (digit) {
+            "0" -> ToneGenerator.TONE_DTMF_0
+            "1" -> ToneGenerator.TONE_DTMF_1
+            "2" -> ToneGenerator.TONE_DTMF_2
+            "3" -> ToneGenerator.TONE_DTMF_3
+            "4" -> ToneGenerator.TONE_DTMF_4
+            "5" -> ToneGenerator.TONE_DTMF_5
+            "6" -> ToneGenerator.TONE_DTMF_6
+            "7" -> ToneGenerator.TONE_DTMF_7
+            "8" -> ToneGenerator.TONE_DTMF_8
+            "9" -> ToneGenerator.TONE_DTMF_9
+            "*" -> ToneGenerator.TONE_DTMF_S
+            "#" -> ToneGenerator.TONE_DTMF_P
+            else -> return
+        }
+        runCatching { dtmfTone.startTone(tone, 120) }
     }
 
     fun hasPermission(permission: String): Boolean =
@@ -206,7 +249,16 @@ class MainActivity : ComponentActivity() {
         val clean = number.trim()
         if (clean.isEmpty()) return
         runCatching {
-            startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", clean, null)))
+            val intent = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", clean, null))
+            val prefs = getSharedPreferences("pane_settings", Context.MODE_PRIVATE)
+            val preferredId = prefs.getString("preferred_phone_account_id", null)
+            val preferredComponent = prefs.getString("preferred_phone_account_component", null)
+            val telecom = getSystemService(TelecomManager::class.java)
+            val preferred = telecom?.callCapablePhoneAccounts?.firstOrNull { handle ->
+                handle.id == preferredId && handle.componentName.flattenToString() == preferredComponent
+            }
+            if (preferred != null) intent.putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, preferred)
+            startActivity(intent)
         }
     }
 }
@@ -214,7 +266,10 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PaneApp(activity: MainActivity) {
-    var selected by remember { mutableStateOf(PaneTab.Favorites) }
+    val prefs = remember(activity) { activity.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
+    var selected by remember(prefs) {
+        mutableStateOf(runCatching { PaneTab.valueOf(prefs.getString("default_launch_screen", "Favorites") ?: "Favorites") }.getOrDefault(PaneTab.Favorites))
+    }
     var query by remember { mutableStateOf("") }
     var dialed by remember { mutableStateOf("") }
     var contacts by remember { mutableStateOf(emptyList<Person>()) }
@@ -229,7 +284,6 @@ private fun PaneApp(activity: MainActivity) {
     }
     var permissionState by remember { mutableStateOf(false) }
     var defaultDialer by remember { mutableStateOf(activity.isDefaultDialer()) }
-    val prefs = remember(activity) { activity.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
     var themeChoice by remember(prefs) { mutableStateOf(prefs.getString("dialer_theme", "System") ?: "System") }
     var buttonsChoice by remember(prefs) { mutableStateOf(prefs.getString("call_buttons", "Classic dual buttons") ?: "Classic dual buttons") }
     var incomingChoice by remember(prefs) { mutableStateOf(prefs.getString("incoming_style", "Fullscreen") ?: "Fullscreen") }
@@ -282,7 +336,17 @@ private fun PaneApp(activity: MainActivity) {
                 .blur(if (glassTarget != null) 8.dp else 0.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("P A N E", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            Modifier.clip(RoundedCornerShape(20.dp)).background(Panel)
+                                .border(1.dp, Line.copy(alpha = 0.8f), RoundedCornerShape(20.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(CallGreen))
+                            Spacer(Modifier.width(7.dp))
+                            Text("PANE  /  SMART DIALER", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.15.sp)
+                        }
+                        Spacer(Modifier.height(9.dp))
                         Text(
                             when (selected) {
                                 PaneTab.Favorites -> "Your people"
@@ -290,10 +354,18 @@ private fun PaneApp(activity: MainActivity) {
                                 PaneTab.Contacts -> "Contacts"
                                 PaneTab.Keypad -> "Keypad"
                                 PaneTab.Settings -> "Settings"
-                            }, color = Ink, fontSize = 28.sp, fontWeight = FontWeight.SemiBold
+                            }, color = Ink, fontSize = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.55).sp, lineHeight = 34.sp
                         )
                     }
-                    Text("AURORA GLASS", color = Muted, fontSize = 10.sp)
+                    Column(
+                        Modifier.clip(RoundedCornerShape(18.dp)).background(Panel)
+                            .border(1.dp, Line.copy(alpha = 0.75f), RoundedCornerShape(18.dp))
+                            .padding(horizontal = 11.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("LOCAL", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Text("•", color = CallGreen, fontSize = 17.sp, lineHeight = 15.sp)
+                    }
                 }
 
                 Spacer(Modifier.height(12.dp))
@@ -301,7 +373,7 @@ private fun PaneApp(activity: MainActivity) {
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel)
                             .border(1.dp, Line, RoundedCornerShape(16.dp))
-                            .clickable { activity.requestDefaultDialer() }.padding(12.dp),
+                            .combinedClickable(onClick = { activity.requestDefaultDialer() }, onLongClick = { showGlass("Set Pane as default phone app") }).padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -335,7 +407,7 @@ private fun PaneApp(activity: MainActivity) {
                     when (selected) {
                         PaneTab.Keypad -> KeypadPanel(
                             dialed = dialed,
-                            onDigit = { dialed += it },
+                            onDigit = { dialed += it; activity.playDtmf(it) },
                             onDelete = { if (dialed.isNotEmpty()) dialed = dialed.dropLast(1) },
                             onCall = { activity.openDialer(dialed) },
                             onGlassPress = showGlass
@@ -379,16 +451,19 @@ private fun PaneApp(activity: MainActivity) {
 
                 Spacer(Modifier.height(12.dp))
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Panel)
-                        .border(1.dp, Line, RoundedCornerShape(24.dp)).padding(7.dp),
+                    Modifier.fillMaxWidth().shadow(22.dp, RoundedCornerShape(30.dp))
+                        .clip(RoundedCornerShape(30.dp))
+                        .background(if (useDarkPalette) Color(0xB51A2740) else Color(0xD9FFFFFF))
+                        .border(1.dp, Color.White.copy(alpha = if (useDarkPalette) 0.18f else 0.82f), RoundedCornerShape(30.dp))
+                        .padding(6.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     PaneTab.values().forEach { tab ->
                         val active = tab == selected
                         Column(
-                            Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
-                                .background(if (active) Accent.copy(alpha = if (useDarkPalette) 0.22f else 0.14f) else Color.Transparent)
-                                .combinedClickable(onClick = { selected = tab }, onLongClick = { showGlass(tab.label) }).padding(vertical = 8.dp),
+                            Modifier.weight(1f).clip(RoundedCornerShape(20.dp))
+                                .background(if (active) Accent.copy(alpha = if (useDarkPalette) 0.28f else 0.16f) else Color.Transparent)
+                                .combinedClickable(onClick = { selected = tab; prefs.edit().putString("default_launch_screen", tab.name).apply() }, onLongClick = { showGlass(tab.label) }).padding(vertical = 8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
@@ -420,8 +495,8 @@ private fun PaneApp(activity: MainActivity) {
                 ) {
                     Column(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                            .background(Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0xDD1B2434))))
-                            .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                            .background(Brush.verticalGradient(listOf(Color(0xF2FFFFFF), Color(0xE61B2434), Color(0xEA101827))))
+                            .border(1.dp, Color.White.copy(alpha = 0.42f), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                             .padding(horizontal = 22.dp, vertical = 18.dp)
                     ) {
                         Box(Modifier.width(38.dp).height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.65f)).align(Alignment.CenterHorizontally))
