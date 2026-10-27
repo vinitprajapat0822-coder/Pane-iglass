@@ -407,6 +407,8 @@ private fun PaneApp(activity: MainActivity) {
                     when (selected) {
                         PaneTab.Keypad -> KeypadPanel(
                             dialed = dialed,
+                            speedDials = (1..5).mapNotNull { slot -> prefs.getString("speed_dial_$slot", null)?.let { slot.toString() to it } },
+                            onSpeedDial = activity::openDialer,
                             onDigit = { dialed += it; activity.playDtmf(it) },
                             onDelete = { if (dialed.isNotEmpty()) dialed = dialed.dropLast(1) },
                             onCall = { activity.openDialer(dialed) },
@@ -1014,9 +1016,34 @@ private fun PeoplePanel(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun KeypadPanel(dialed: String, onDigit: (String) -> Unit, onDelete: () -> Unit, onCall: () -> Unit, onGlassPress: (String) -> Unit) {
+private fun KeypadPanel(
+    dialed: String,
+    speedDials: List<Pair<String, String>>,
+    onSpeedDial: (String) -> Unit,
+    onDigit: (String) -> Unit,
+    onDelete: () -> Unit,
+    onCall: () -> Unit,
+    onGlassPress: (String) -> Unit
+) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(if (dialed.isBlank()) "Enter a number" else dialed, color = Ink, fontSize = 24.sp, textAlign = TextAlign.Center)
+        Text(if (dialed.isBlank()) "Enter a number" else dialed, color = Ink, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+        if (speedDials.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+                speedDials.take(5).forEach { (slot, number) ->
+                    Column(
+                        Modifier.weight(1f).clip(RoundedCornerShape(13.dp)).background(Panel)
+                            .border(1.dp, Line, RoundedCornerShape(13.dp))
+                            .combinedClickable(onClick = { onSpeedDial(number) }, onLongClick = { onGlassPress("Speed dial slot $slot") })
+                            .padding(vertical = 8.dp, horizontal = 3.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(slot, color = Accent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(number.takeLast(4), color = Muted, fontSize = 9.sp, maxLines = 1)
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(16.dp))
         val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")
         keys.chunked(3).forEach { row ->
