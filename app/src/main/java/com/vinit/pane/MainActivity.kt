@@ -545,7 +545,10 @@ private fun SettingsPanel(
                             Column(
                                 Modifier.weight(1f).clip(RoundedCornerShape(15.dp))
                                     .background(previewBg).border(1.dp, if (theme == option) Accent else Line, RoundedCornerShape(15.dp))
-                                    .clickable { onThemeChange(option); selected = null }.padding(8.dp),
+                                    .combinedClickable(
+                                        onClick = { onThemeChange(option); selected = null },
+                                        onLongClick = { onGlassPress("Dialer theme: $option") }
+                                    ).padding(8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopEnd) {
@@ -560,14 +563,14 @@ private fun SettingsPanel(
                             }
                         }
                     }
-                    "Call Buttons" -> listOf("Classic dual buttons", "Slide to answer").forEach { option -> Text((if (buttons == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { onButtonsChange(option); selected = null }.padding(12.dp)) }
-                    "Incoming Call Style" -> listOf("Banner", "Fullscreen").forEach { option -> Text((if (incoming == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { onIncomingChange(option); selected = null }.padding(12.dp)) }
+                    "Call Buttons" -> listOf("Classic dual buttons", "Slide to answer").forEach { option -> Text((if (buttons == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onButtonsChange(option); selected = null }, onLongClick = { onGlassPress("Call button style: $option") }).padding(12.dp)) }
+                    "Incoming Call Style" -> listOf("Banner", "Fullscreen").forEach { option -> Text((if (incoming == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onIncomingChange(option); selected = null }, onLongClick = { onGlassPress("Incoming call style: $option") }).padding(12.dp)) }
                     "Call Backgrounds" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Saved background: " + if (prefs.getString("call_background_uri", null) == null) "None" else prefs.getString("call_background_type", "image")!!.replaceFirstChar { it.uppercase() }, color = Muted, fontSize = 12.sp)
                         Text("CHOOSE PHOTO", color = Accent, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.fillMaxWidth().clickable { imageBackgroundPicker.launch(arrayOf("image/*")) }.padding(vertical = 12.dp))
+                            modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { imageBackgroundPicker.launch(arrayOf("image/*")) }, onLongClick = { onGlassPress("Choose call background photo") }).padding(vertical = 12.dp))
                         Text("CHOOSE VIDEO", color = Accent, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.fillMaxWidth().clickable { videoBackgroundPicker.launch(arrayOf("video/*")) }.padding(vertical = 12.dp))
+                            modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { videoBackgroundPicker.launch(arrayOf("video/*")) }, onLongClick = { onGlassPress("Choose call background video") }).padding(vertical = 12.dp))
                         Text("Background applies to the incoming/active call screen.", color = Muted, fontSize = 11.sp)
                     }
                     "Fake Call" -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
