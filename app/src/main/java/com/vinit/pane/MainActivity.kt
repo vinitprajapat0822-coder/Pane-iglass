@@ -274,7 +274,7 @@ private fun PaneApp(activity: MainActivity) {
                 if (!defaultDialer) {
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel)
-                            .border(1.dp, Line), RoundedCornerShape(16.dp))
+                            .border(1.dp, Line, RoundedCornerShape(16.dp))
                             .clickable { activity.requestDefaultDialer() }.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
