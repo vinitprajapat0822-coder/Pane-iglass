@@ -1,15 +1,20 @@
 package com.vinit.pane
 
 import android.telecom.Call
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,7 +61,7 @@ class InCallActivity : ComponentActivity() {
 @Composable
 private fun InCallScreen() {
     val context = LocalContext.current
-    val prefs = remember(context) { context.getSharedPreferences("pane_settings", MODE_PRIVATE) }
+    val prefs = remember(context) { context.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
     val slideToAnswer = prefs.getString("call_buttons", "Classic dual buttons") == "Slide to answer"
     val call by remember { derivedStateOf { PaneCallController.call } }
     val state by remember { derivedStateOf { PaneCallController.state } }
