@@ -166,9 +166,10 @@ class MainActivity : ComponentActivity() {
             CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION,
             CallLog.Calls.PHONE_ACCOUNT_ID
         )
-        val phoneAccountLabels = runCatching {
-            getSystemService(TelecomManager::class.java).allPhoneAccounts.associate {
-                it.accountHandle.id to it.label.toString()
+        val telecom = getSystemService(TelecomManager::class.java)
+        val phoneAccountLabels: Map<String, String> = runCatching {
+            telecom.getCallCapablePhoneAccounts().associate { handle ->
+                handle.id to (telecom.getPhoneAccount(handle)?.label?.toString() ?: "")
             }
         }.getOrDefault(emptyMap())
         runCatching {
