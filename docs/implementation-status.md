@@ -20,6 +20,7 @@ Pane is a native Kotlin + Jetpack Compose Android dialer prototype. The project 
 | Incoming call style | Done in source | Fullscreen or resized translucent banner window in code |
 | Custom call background | Done in source | Persisted photo/video URI is displayed on the call screen |
 | Contact photo on call | Done in source | Looks up contact photo when enabled and permission is granted |
+| Call image memory use | Done in source | Downsamples selected background and caller photos before displaying them, reducing large-bitmap memory spikes |
 | Caller announcement | Done in source | Android TextToSpeech during ringing, when enabled |
 | Flash on call | Done in source | Camera2 torch while ringing, when enabled and supported |
 | Fake call | Done in source | Clearly simulated; it does not create a real telecom call |
@@ -31,9 +32,9 @@ Pane is a native Kotlin + Jetpack Compose Android dialer prototype. The project 
 | Accessibility | Done as a system handoff | Opens Android accessibility settings |
 | Call Settings / Voicemail | Partial | Opens Android phone settings; carrier-specific voicemail setup is not automated |
 | Language | Partial | Hindi localizes core navigation and settings labels; some explanatory copy and the call screen remain English |
-| Call Back Screen | Partial | Preference is stored; a dedicated post-call callback screen is not implemented |
+| Call Back Screen | Implemented in source | After a real call disconnects, shows last caller/number with Call back and Close when enabled; device behavior still needs testing |
 | Recents Edit | Partial | Toggles the edit presentation; does not delete or modify Android's call-log entries |
-| Liquid Glass long-press | Partial | Main navigation, many list rows, keypad keys and settings selectors have haptic spring-sheet feedback; not every in-call control has the sheet |
+| Liquid Glass long-press | Partial | Main navigation, many list rows, keypad keys, settings selectors and in-call action buttons have haptic spring-sheet feedback. Full native-style real-time refraction is not claimed; blur behavior varies by Android version |
 | Privacy Policy | Partial | In-app privacy explanation only; no published legal-policy URL |
 | Ads / subscription / billing | Done | No ad, subscription, paywall, or billing integration is included |
 
@@ -44,6 +45,16 @@ Pane is a native Kotlin + Jetpack Compose Android dialer prototype. The project 
 - Output: `app-debug.apk`, uploaded as artifact `pane-debug-apk`
 - The workflow is a **compile/build check only**, not a full automated test suite.
 - No claim of physical-device verification is made from a green CI build.
+- Latest verified application-source build before this documentation sync: commit `6871b2600f89701ffd10dae4f3218ccfad1b4b81`; GitHub Actions run: [40458083724](https://github.com/vinitprajapat0822-coder/Pane-iglass/actions/runs/40458083724). The `pane-debug-apk` artifact was uploaded successfully.
+
+## Recent build log
+
+- UI refresh: revised app header, five-tab floating translucent navigation, typography, settings icon tiles/dividers, keypad sizing and recent-filter contrast.
+- Phone utility actions: DTMF key tones, preferred SIM handoff, persisted launch tab, saved speed-dial shortcuts, local call-block list, system accessibility/call/sound settings handoffs, and user-confirmed quick-response SMS composer.
+- Call screen: photo/video background rendering, contact-photo lookup, downsampled image decoding, compact Banner/Fullscreen layout mode, post-call callback screen, and haptic glass overlay for call action buttons.
+- Language: Hindi localization for core navigation and settings labels, with immediate state refresh. Other explanatory strings remain English.
+- Build fixes recorded: corrected Material3 `LocalTextStyle` import, replaced unsupported Android call-settings constant with an intent action string, removed unsupported XML `windowDimAmount`, imported delegated Compose state setter, and reset full-screen window bounds after Banner mode.
+- Latest source commit listed above compiled successfully and uploaded the debug APK. Automated checks have not exercised real phone calls or MIUI-specific behavior.
 
 ## Redmi Note 7S manual test plan
 
