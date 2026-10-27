@@ -371,6 +371,7 @@ private fun PaneApp(activity: MainActivity) {
     var permissionState by remember { mutableStateOf(false) }
     var defaultDialer by remember { mutableStateOf(activity.isDefaultDialer()) }
     var themeChoice by remember(prefs) { mutableStateOf(prefs.getString("dialer_theme", "System") ?: "System") }
+    var languageChoice by remember(prefs) { mutableStateOf(prefs.getString("app_language", "System default") ?: "System default") }
     var buttonsChoice by remember(prefs) { mutableStateOf(prefs.getString("call_buttons", "Classic dual buttons") ?: "Classic dual buttons") }
     var incomingChoice by remember(prefs) { mutableStateOf(prefs.getString("incoming_style", "Fullscreen") ?: "Fullscreen") }
     val useDarkPalette = when (themeChoice) {
@@ -412,7 +413,7 @@ private fun PaneApp(activity: MainActivity) {
         if (missing.isNotEmpty()) permissionLauncher.launch(missing.toTypedArray()) else refresh()
     }
 
-    CompositionLocalProvider(LocalPanePalette provides palette, LocalPaneLanguage provides (prefs.getString("app_language", "System default") ?: "System default")) {
+    CompositionLocalProvider(LocalPanePalette provides palette, LocalPaneLanguage provides languageChoice) {
     Surface(Modifier.fillMaxSize(), color = Night) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
             if (useDarkPalette) listOf(Color(0xFF19243A), Night, Color(0xFF101827))
@@ -532,6 +533,8 @@ private fun PaneApp(activity: MainActivity) {
                             onButtonsChange = { buttonsChoice = it; prefs.edit().putString("call_buttons", it).apply() },
                             incoming = incomingChoice,
                             onIncomingChange = { incomingChoice = it; prefs.edit().putString("incoming_style", it).apply() },
+                            language = languageChoice,
+                            onLanguageChange = { languageChoice = it; prefs.edit().putString("app_language", it).apply() },
                             onGlassPress = showGlass
                         )
                     }
@@ -642,6 +645,8 @@ private fun SettingsPanel(
     onButtonsChange: (String) -> Unit,
     incoming: String,
     onIncomingChange: (String) -> Unit,
+    language: String,
+    onLanguageChange: (String) -> Unit,
     onGlassPress: (String) -> Unit
 ) {
     val groups = listOf(
@@ -919,9 +924,9 @@ private fun SettingsPanel(
                             ).padding(vertical = 12.dp))
                     }
                     "Language" -> listOf("System default", "English", "हिन्दी").forEach { option ->
-                        Text((if (prefs.getString("app_language", "System default") == option) "✓  " else "    ") + option, color = Ink,
+                        Text((if (language == option) "✓  " else "    ") + option, color = Ink,
                             modifier = Modifier.fillMaxWidth().combinedClickable(
-                                onClick = { prefs.edit().putString("app_language", option).apply(); selected = null },
+                                onClick = { onLanguageChange(option); selected = null },
                                 onLongClick = { onGlassPress("Preferred language: $option") }
                             ).padding(vertical = 12.dp))
                     }
