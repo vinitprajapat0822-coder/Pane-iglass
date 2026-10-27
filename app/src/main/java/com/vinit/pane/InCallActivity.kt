@@ -1,7 +1,12 @@
 package com.vinit.pane
 
 import android.telecom.Call
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.speech.tts.TextToSpeech
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,6 +24,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -39,7 +46,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import androidx.core.content.ContextCompat
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private val CallBg = Color(0xFF0D111B)
@@ -63,6 +74,8 @@ private fun InCallScreen() {
     val context = LocalContext.current
     val prefs = remember(context) { context.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
     val slideToAnswer = prefs.getString("call_buttons", "Classic dual buttons") == "Slide to answer"
+    val announceCaller = prefs.getBoolean("Call Announcer", false)
+    val flashOnCall = prefs.getBoolean("Flash On Call", false)
     val call by remember { derivedStateOf { PaneCallController.call } }
     val state by remember { derivedStateOf { PaneCallController.state } }
     val name by remember { derivedStateOf { PaneCallController.displayName } }
@@ -70,6 +83,48 @@ private fun InCallScreen() {
     val muted by remember { derivedStateOf { PaneCallController.muted } }
     val speaker by remember { derivedStateOf { PaneCallController.speaker } }
     val ringing = state == Call.STATE_RINGING
+    DisposableEffect(announceCaller, ringing, name, number) {
+        var engine: TextToSpeech? = null
+        if (announceCaller && ringing) {
+            engine = TextToSpeech(context) { result ->
+                if (result == TextToSpeech.SUCCESS) {
+                    engine?.let { tts ->
+                        tts.language = Locale.getDefault()
+                        val caller = if (name.isBlank() || name == number) number else name
+                        tts.speak("Incoming call from $caller", TextToSpeech.QUEUE_FLUSH, null, "pane-caller-announcement")
+                    }
+                }
+            }
+        }
+        onDispose {
+            engine?.stop()
+            engine?.shutdown()
+        }
+    }
+    LaunchedEffect(ringing, flashOnCall) {
+        if (ringing && flashOnCall &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        ) {
+            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            val cameraId = runCatching {
+                cameraManager.cameraIdList.firstOrNull { id ->
+                    cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                }
+            }.getOrNull()
+            if (cameraId != null) {
+                try {
+                    while (isActive) {
+                        cameraManager.setTorchMode(cameraId, true)
+                        delay(450)
+                        cameraManager.setTorchMode(cameraId, false)
+                        delay(450)
+                    }
+                } finally {
+                    runCatching { cameraManager.setTorchMode(cameraId, false) }
+                }
+            }
+        }
+    }
     val active = state == Call.STATE_ACTIVE
     val status = when (state) {
         Call.STATE_RINGING -> "INCOMING CALL"
