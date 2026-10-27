@@ -763,16 +763,12 @@ private fun SettingsPanel(
                             modifier = Modifier.clickable { runCatching { context.startActivity(Intent("android.settings.CALL_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }.padding(vertical = 12.dp))
                     }
                     "Sound & Vibration" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Call sound", "Vibration").forEach { feature ->
-                            val key = "sound_vibration_$feature"
-                            val enabled = prefs.getBoolean(key, true)
-                            Text((if (enabled) "●  ON  ·  " else "○  OFF ·  ") + feature, color = Ink,
-                                modifier = Modifier.fillMaxWidth().combinedClickable(
-                                    onClick = { prefs.edit().putBoolean(key, !enabled).apply(); selected = "Sound & Vibration" },
-                                    onLongClick = { onGlassPress(feature) }
-                                ).padding(vertical = 10.dp))
-                        }
-                        Text("Saved preferences only; Android remains responsible for actual call audio routing.", color = Muted, fontSize = 11.sp)
+                        Text("Ringer volume, vibration patterns and call audio are controlled by Android and your carrier.", color = Muted, fontSize = 12.sp)
+                        Text("OPEN SOUND SETTINGS  ↗", color = Accent, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.combinedClickable(
+                                onClick = { runCatching { context.startActivity(Intent("android.settings.SOUND_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+                                onLongClick = { onGlassPress("Open system sound settings") }
+                            ).padding(vertical = 12.dp))
                     }
                     "Call Back Screen" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(if (callbackEnabled) "✓  Callback shortcut enabled" else "○  Callback shortcut disabled", color = Ink,
