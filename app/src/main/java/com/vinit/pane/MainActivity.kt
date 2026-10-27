@@ -758,7 +758,7 @@ private fun SettingsPanel(
                     "Call Settings", "Voicemail" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(if (selected == "Voicemail") "Voicemail setup varies by SIM operator. Open system phone settings to configure the number and alerts." else "Open Android phone settings. Available options depend on the carrier and installed phone service.", color = Muted, fontSize = 12.sp)
                         Text("OPEN PHONE SETTINGS  ↗", color = Accent, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clickable { runCatching { context.startActivity(Intent(Settings.ACTION_CALL_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }.padding(vertical = 12.dp))
+                            modifier = Modifier.clickable { runCatching { context.startActivity(Intent("android.settings.CALL_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }.padding(vertical = 12.dp))
                     }
                     "Sound & Vibration" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("Call sound", "Vibration").forEach { feature ->
