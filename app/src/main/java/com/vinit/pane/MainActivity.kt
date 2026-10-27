@@ -6,6 +6,7 @@ import android.telecom.TelecomManager
 import android.os.Build
 import android.app.Activity
 import android.content.Intent
+import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
@@ -47,6 +48,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.hapticfeedback.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -346,12 +348,14 @@ private fun SettingsPanel() {
         "OTHER" to listOf("Help & FAQ", "Rate App", "Privacy Policy")
     )
     val switchRows = setOf("Call Announcer", "Flash On Call", "Contact Photo on Call", "Enable DTMF Tone")
-    val states = remember { mutableStateMapOf<String, Boolean>() }
+    val context = LocalContext.current
+    val prefs = remember(context) { context.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
+    val states = remember(prefs) { mutableStateMapOf<String, Boolean>().apply { switchRows.forEach { this[it] = prefs.getBoolean(it, false) } } }
     var selected by remember { mutableStateOf<String?>(null) }
     val haptics = LocalHapticFeedback.current
-    var theme by remember { mutableStateOf("System") }
-    var buttons by remember { mutableStateOf("Classic") }
-    var incoming by remember { mutableStateOf("Fullscreen") }
+    var theme by remember { mutableStateOf(prefs.getString("dialer_theme", "System") ?: "System") }
+    var buttons by remember { mutableStateOf(prefs.getString("call_buttons", "Classic dual buttons") ?: "Classic dual buttons") }
+    var incoming by remember { mutableStateOf(prefs.getString("incoming_style", "Fullscreen") ?: "Fullscreen") }
     Column(Modifier.fillMaxSize()) {
         Text("Settings", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(8.dp))
@@ -363,7 +367,7 @@ private fun SettingsPanel() {
                         Spacer(Modifier.height(7.dp))
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(horizontal = 13.dp)) {
                             group.second.forEach { row ->
-                                Row(Modifier.fillMaxWidth().combinedClickable(onClick = { if (row in switchRows) states[row] = !(states[row] ?: false) else selected = row }, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); selected = row }).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.fillMaxWidth().combinedClickable(onClick = { if (row in switchRows) { val enabled = !(states[row] ?: false); states[row] = enabled; prefs.edit().putBoolean(row, enabled).apply() } else selected = row }, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); selected = row }).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text(row, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                         val subtitle = when (row) { "Dialer Themes" -> "Current: " + theme; "Call Buttons" -> "Current: " + buttons; "Incoming Call Style" -> incoming; else -> null }
@@ -387,9 +391,9 @@ private fun SettingsPanel() {
                 Text(selected ?: "", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 when (selected) {
-                    "Dialer Themes" -> listOf("System", "Dark", "Light").forEach { option -> Text((if (theme == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { theme = option; selected = null }.padding(12.dp)) }
-                    "Call Buttons" -> listOf("Classic dual buttons", "Slide to answer").forEach { option -> Text((if (buttons == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { buttons = option; selected = null }.padding(12.dp)) }
-                    "Incoming Call Style" -> listOf("Banner", "Fullscreen").forEach { option -> Text((if (incoming == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { incoming = option; selected = null }.padding(12.dp)) }
+                    "Dialer Themes" -> listOf("System", "Dark", "Light").forEach { option -> Text((if (theme == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { theme = option; prefs.edit().putString("dialer_theme", option).apply(); selected = null }.padding(12.dp)) }
+                    "Call Buttons" -> listOf("Classic dual buttons", "Slide to answer").forEach { option -> Text((if (buttons == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { buttons = option; prefs.edit().putString("call_buttons", option).apply(); selected = null }.padding(12.dp)) }
+                    "Incoming Call Style" -> listOf("Banner", "Fullscreen").forEach { option -> Text((if (incoming == option) "✓ " else "") + option, color = Ink, modifier = Modifier.fillMaxWidth().clickable { incoming = option; prefs.edit().putString("incoming_style", option).apply(); selected = null }.padding(12.dp)) }
                     "Call Backgrounds" -> Text("Photo/video call background selection is not connected yet.", color = Muted)
                     "Fake Call" -> Text("Fake call simulation is not connected yet; no real call will be placed.", color = Muted)
                     "Flash On Call" -> Text("Flashlight hardware integration is not connected yet.", color = Muted)
