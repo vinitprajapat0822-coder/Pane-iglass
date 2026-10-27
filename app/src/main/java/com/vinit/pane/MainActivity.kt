@@ -103,7 +103,8 @@ internal data class Person(
     val number: String,
     val starred: Boolean = false,
     val type: String = "",
-    val timestamp: String = ""
+    val timestamp: String = "",
+    val simLabel: String = ""
 ) {
     val initials: String get() = name.split(" ").filter { it.isNotBlank() }.take(2)
         .mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").ifBlank { "#" }
@@ -162,8 +163,14 @@ class MainActivity : ComponentActivity() {
         val result = mutableListOf<Person>()
         val projection = arrayOf(
             CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME,
-            CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION
+            CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION,
+            CallLog.Calls.PHONE_ACCOUNT_ID
         )
+        val phoneAccountLabels = runCatching {
+            getSystemService(TelecomManager::class.java).allPhoneAccounts.associate {
+                it.accountHandle.id to it.label.toString()
+            }
+        }.getOrDefault(emptyMap())
         runCatching {
             contentResolver.query(
                 CallLog.Calls.CONTENT_URI, projection, null, null, CallLog.Calls.DATE + " DESC"
@@ -173,6 +180,7 @@ class MainActivity : ComponentActivity() {
                 val typeCol = cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE)
                 val dateCol = cursor.getColumnIndexOrThrow(CallLog.Calls.DATE)
                 val idCol = cursor.getColumnIndexOrThrow(CallLog.Calls._ID)
+                val accountIdCol = cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID)
                 while (cursor.moveToNext()) {
                     val number = cursor.getString(numberCol).orEmpty()
                     val name = cursor.getString(nameCol).orEmpty().ifBlank { number.ifBlank { "Unknown caller" } }
@@ -183,8 +191,10 @@ class MainActivity : ComponentActivity() {
                         CallLog.Calls.REJECTED_TYPE -> "Rejected"
                         else -> "Call"
                     }
-                    val timestamp = runCatching { SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date(cursor.getLong(dateCol))) }.getOrDefault("")
-                    result += Person(cursor.getString(idCol).orEmpty(), name, number, type = type, timestamp = timestamp)
+                    val timestamp = runCatching { SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(cursor.getLong(dateCol))) }.getOrDefault("")
+                    val accountId = if (accountIdCol >= 0) cursor.getString(accountIdCol).orEmpty() else ""
+                    val simLabel = phoneAccountLabels[accountId].orEmpty()
+                    result += Person(cursor.getString(idCol).orEmpty(), name, number, type = type, timestamp = timestamp, simLabel = simLabel)
                 }
             }
         }
@@ -255,7 +265,7 @@ private fun PaneApp(activity: MainActivity) {
     }
 
     LaunchedEffect(Unit) {
-        val missing = listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.READ_CALL_LOG)
+        val missing = listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_PHONE_STATE)
             .filterNot(activity::hasPermission)
         if (missing.isNotEmpty()) permissionLauncher.launch(missing.toTypedArray()) else refresh()
     }
@@ -586,15 +596,23 @@ private fun RecentsPanel(
                             Text("${when (person.type) { "Missed" -> "↙ Missed"; "Outgoing" -> "↗ Outgoing"; "Incoming" -> "↙ Incoming"; else -> person.type }} · ${person.number}",
                                 color = if (person.type == "Missed") Color(0xFFFF8585) else Muted, fontSize = 11.sp)
                             Text(person.timestamp, color = Muted, fontSize = 10.sp)
+                            if (person.simLabel.isNotBlank()) Text(person.simLabel, color = Accent, fontSize = 9.sp)
                         }
                         if (editing) {
                             Text("⋯", color = Accent, fontSize = 22.sp, modifier = Modifier.padding(horizontal = 8.dp))
                         } else {
-                            Box(
-                                Modifier.size(38.dp).clip(CircleShape).background(Color(0xFF173C35))
-                                    .border(1.dp, CallGreen.copy(alpha = 0.5f), CircleShape).clickable { onCall(person.number) },
-                                contentAlignment = Alignment.Center
-                            ) { Icon(Icons.Default.Call, contentDescription = "Open phone dialer", tint = CallGreen) }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier.size(32.dp).clip(CircleShape).background(Panel).border(1.dp, Line, CircleShape)
+                                        .clickable { onGlassPress("Call details\n${person.name}\n${person.number}\n${person.type} · ${person.timestamp}\n${person.simLabel}") },
+                                    contentAlignment = Alignment.Center
+                                ) { Text("i", color = Accent, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+                                Box(
+                                    Modifier.size(38.dp).clip(CircleShape).background(Color(0xFF173C35))
+                                        .border(1.dp, CallGreen.copy(alpha = 0.5f), CircleShape).clickable { onCall(person.number) },
+                                    contentAlignment = Alignment.Center
+                                ) { Icon(Icons.Default.Call, contentDescription = "Open phone dialer", tint = CallGreen) }
+                            }
                         }
                     }
                 }
