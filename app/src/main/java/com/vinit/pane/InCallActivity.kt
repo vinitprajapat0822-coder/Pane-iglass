@@ -8,8 +8,13 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.speech.tts.TextToSpeech
 import android.os.Bundle
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.provider.ContactsContract
+import android.widget.VideoView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.produceState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.ui.Alignment
@@ -43,11 +50,18 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import androidx.core.content.ContextCompat
@@ -66,7 +80,7 @@ class InCallActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
-        setContent { MaterialTheme { InCallScreen() } }
+        setContent { MaterialTheme { androidx.compose.runtime.CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif, letterSpacing = 0.12.sp)) { InCallScreen() } } }
     }
 }
 
@@ -77,6 +91,9 @@ private fun InCallScreen() {
     val slideToAnswer = prefs.getString("call_buttons", "Classic dual buttons") == "Slide to answer"
     val announceCaller = prefs.getBoolean("Call Announcer", false)
     val flashOnCall = prefs.getBoolean("Flash On Call", false)
+    val backgroundUri = prefs.getString("call_background_uri", null)
+    val backgroundType = prefs.getString("call_background_type", "image") ?: "image"
+    val showContactPhoto = prefs.getBoolean("Contact Photo on Call", false)
     val call by remember { derivedStateOf { PaneCallController.call } }
     val state by remember { derivedStateOf { PaneCallController.state } }
     val name by remember { derivedStateOf { PaneCallController.displayName } }
@@ -88,6 +105,36 @@ private fun InCallScreen() {
     val fakeAnswered = remember { mutableStateOf(false) }
     val displayName = if (fakeCall) fakeName else name
     val displayNumber = if (fakeCall) fakeNumber else number
+    val callBackgroundBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, backgroundUri, backgroundType) {
+        value = if (backgroundUri != null && backgroundType != "video") {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(Uri.parse(backgroundUri))?.use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
+                }.getOrNull()
+            }
+        } else null
+    }
+    val contactPhotoUri by produceState<String?>(null, displayNumber, showContactPhoto, fakeCall) {
+        value = if (showContactPhoto && !fakeCall && displayNumber.isNotBlank()) {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val lookup = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(displayNumber))
+                    context.contentResolver.query(lookup, arrayOf(ContactsContract.Contacts.PHOTO_URI), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    }
+                }.getOrNull()
+            }
+        } else null
+    }
+    val contactPhotoBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, contactPhotoUri) {
+        value = if (!contactPhotoUri.isNullOrBlank()) {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(Uri.parse(contactPhotoUri))?.use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
+                }.getOrNull()
+            }
+        } else null
+    }
     val muted by remember { derivedStateOf { PaneCallController.muted } }
     val speaker by remember { derivedStateOf { PaneCallController.speaker } }
     val ringing = state == Call.STATE_RINGING || (fakeCall && !fakeAnswered.value)
@@ -147,12 +194,32 @@ private fun InCallScreen() {
     }
 
     Surface(Modifier.fillMaxSize(), color = CallBg) {
-        Box(Modifier.fillMaxSize().background(CallBg).padding(24.dp), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Box(Modifier.fillMaxSize().background(CallBg)) {
+            if (backgroundType == "video" && !backgroundUri.isNullOrBlank()) {
+                LoopingVideoBackground(backgroundUri)
+            } else if (callBackgroundBitmap != null) {
+                Image(
+                    bitmap = callBackgroundBitmap!!,
+                    contentDescription = "Selected call background",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(Color(0xB90D111B), Color(0x8A0D111B), Color(0xF20D111B)))
+                )
+            )
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text("P A N E", color = Color(0xFFB9C5FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(42.dp))
                 Box(Modifier.size(104.dp).clip(CircleShape).background(Color(0xFF293750)), contentAlignment = Alignment.Center) {
-                    Text(displayName.take(1).uppercase(), color = CallText, fontSize = 38.sp, fontWeight = FontWeight.SemiBold)
+                    if (contactPhotoBitmap != null) {
+                        Image(bitmap = contactPhotoBitmap!!, contentDescription = "Caller photo", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    } else {
+                        Text(displayName.take(1).uppercase(), color = CallText, fontSize = 38.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
                 Spacer(Modifier.height(22.dp))
                 Text(displayName, color = CallText, fontSize = 25.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
@@ -187,9 +254,30 @@ private fun InCallScreen() {
                 } else {
                     Text("Call screen opens when Android Telecom delivers a call.", color = CallMuted, textAlign = TextAlign.Center)
                 }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun LoopingVideoBackground(uri: String) {
+    val context = LocalContext.current
+    val view = remember(uri) {
+        VideoView(context).apply {
+            setVideoURI(Uri.parse(uri))
+            setOnPreparedListener { player ->
+                player.isLooping = true
+                player.setVolume(0f, 0f)
+                start()
+            }
+            setOnErrorListener { _, _, _ -> true }
+        }
+    }
+    DisposableEffect(view) {
+        onDispose { runCatching { view.stopPlayback() } }
+    }
+    AndroidView(factory = { view }, modifier = Modifier.fillMaxSize(), update = { })
 }
 
 @Composable
