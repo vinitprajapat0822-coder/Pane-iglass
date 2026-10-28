@@ -6,6 +6,7 @@ import android.telecom.TelecomManager
 import android.os.Build
 import android.app.Activity
 import android.content.Intent
+import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -337,6 +338,20 @@ class MainActivity : ComponentActivity() {
         if (clean.isEmpty()) return
         runCatching {
             val intent = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", clean, null))
+            // If Pane is the default dialer, an implicit ACTION_DIAL may reopen Pane itself.
+            if (isDefaultDialer()) {
+                val externalDialer = packageManager.queryIntentActivities(
+                    intent, PackageManager.MATCH_DEFAULT_ONLY
+                ).firstOrNull { it.activityInfo.packageName != packageName }
+                if (externalDialer == null) {
+                    android.widget.Toast.makeText(
+                        this, "No other phone dialer app was found on this device.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                    return
+                }
+                intent.component = ComponentName(externalDialer.activityInfo.packageName, externalDialer.activityInfo.name)
+            }
             val prefs = getSharedPreferences("pane_settings", Context.MODE_PRIVATE)
             val preferredId = prefs.getString("preferred_phone_account_id", null)
             val preferredComponent = prefs.getString("preferred_phone_account_component", null)
