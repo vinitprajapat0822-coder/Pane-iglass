@@ -415,6 +415,8 @@ private fun PaneApp(activity: MainActivity) {
         contacts = activity.readContacts()
         recents = activity.readRecents()
         permissionState = true
+        // Android shows its own confirmation before Pane becomes the default phone app.
+        if (!activity.isDefaultDialer()) activity.requestDefaultDialer()
     }
 
     fun refresh() {
@@ -426,7 +428,12 @@ private fun PaneApp(activity: MainActivity) {
     LaunchedEffect(Unit) {
         val missing = listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_PHONE_STATE)
             .filterNot(activity::hasPermission)
-        if (missing.isNotEmpty()) permissionLauncher.launch(missing.toTypedArray()) else refresh()
+        if (missing.isNotEmpty()) {
+            permissionLauncher.launch(missing.toTypedArray())
+        } else {
+            refresh()
+            if (!activity.isDefaultDialer()) activity.requestDefaultDialer()
+        }
     }
 
     CompositionLocalProvider(LocalPanePalette provides palette, LocalPaneLanguage provides languageChoice) {
