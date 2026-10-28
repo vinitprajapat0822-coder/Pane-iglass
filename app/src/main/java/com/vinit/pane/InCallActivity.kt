@@ -80,11 +80,11 @@ import androidx.core.content.ContextCompat
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private val CallBg = Color(0xFF0D111B)
-private val CallCard = Color(0xFF1B2333)
-private val CallText = Color(0xFFF0F3FF)
-private val CallMuted = Color(0xFFADB8D0)
-private val CallAccent = Color(0xFF39D98A)
+private val CallBg = Color(0xFF07131F)
+private val CallCard = Color(0xC91A3448)
+private val CallText = Color(0xFFF1FAFF)
+private val CallMuted = Color(0xFF9DB8C8)
+private val CallAccent = Color(0xFF53E6B1)
 private val CallRed = Color(0xFFFF667A)
 
 private fun decodeCallImage(
@@ -284,7 +284,7 @@ private fun InCallScreen() {
         Box(
             Modifier.fillMaxSize().then(
                 if (bannerMode) Modifier.clip(RoundedCornerShape(28.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xF21F2B40), Color(0xF50D111B))))
+                    .background(Brush.verticalGradient(listOf(Color(0xF2204356), Color(0xF507131F))))
                     .border(1.dp, Color.White.copy(alpha = 0.42f), RoundedCornerShape(28.dp))
                 else Modifier.background(CallBg)
             )
@@ -303,13 +303,13 @@ private fun InCallScreen() {
                 }
                 Box(
                     Modifier.fillMaxSize().background(
-                        Brush.verticalGradient(listOf(Color(0xB90D111B), Color(0x8A0D111B), Color(0xF20D111B)))
+                        Brush.verticalGradient(listOf(Color(0xB907131F), Color(0x8A0D2A3A), Color(0xF207131F)))
                     )
                 )
             }
             Box(Modifier.fillMaxSize().padding(if (bannerMode) 16.dp else 24.dp), contentAlignment = Alignment.Center) {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text("P A N E", color = Color(0xFFB9C5FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("P A N E   L I Q U I D", color = Color(0xFF8DE8F2), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(if (bannerMode) 8.dp else 42.dp))
                 Box(Modifier.size(if (bannerMode) 64.dp else 104.dp).clip(CircleShape).background(Color(0xFF293750)), contentAlignment = Alignment.Center) {
                     if (contactPhotoBitmap != null) {

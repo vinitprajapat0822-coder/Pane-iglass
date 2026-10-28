@@ -1,4 +1,4 @@
-# Pane — Implementation Status & Device QA
+# Pane Liquid — Implementation Status & Device QA
 
 ## Current release status
 
@@ -9,13 +9,15 @@ Pane is a native Kotlin + Jetpack Compose Android dialer prototype. The project 
 | Area | Current status | Notes |
 |---|---|---|
 | Five-tab app shell | Done in source | Favourites, Recents, Contacts, Keypad, Settings |
-| UI / typography refresh | Done in source | Floating translucent navigation, refined title hierarchy, system sans-serif typography, settings icon tiles/dividers, improved keypad and recent-filter contrast |
+| UI / typography refresh | Done in source | Floating translucent navigation, cool blue/teal glass palette, reusable glass material, animated press scaling, and specular-edge gradients |
 | Contacts and favourites | Done in source | Uses Android Contacts Provider after permission |
 | Recents | Done in source | All/Missed filter, latest-first call history, timestamp, account/SIM label where Android reports it, call details and dialer handoff |
 | Search | Done in source | Filters names/numbers in the main lists |
 | DTMF keypad tone | Done in source | Plays local keypad tone when the DTMF preference is enabled |
 | Default launch tab | Done in source | Persists selected tab locally |
 | Theme selection | Done in source | System / Dark / Light |
+| Liquid Glass intensity | Done in source | Persisted 0–100% Appearance slider controls shared glass surface gradients and edge highlights; lightweight fallback avoids continuous GPU shaders |
+| Adaptive app icon | Done in source | Pane Liquid adaptive launcher icon with a translucent blue/teal phone glyph and Android monochrome layer |
 | Call buttons | Done in source | Classic answer/reject or slide-to-answer |
 | Incoming call style | Done in source | Fullscreen or resized translucent banner window in code |
 | Custom call background | Done in source | Persisted photo/video URI is displayed on the call screen |
@@ -46,6 +48,14 @@ Pane is a native Kotlin + Jetpack Compose Android dialer prototype. The project 
 - The workflow is a **compile/build check only**, not a full automated test suite.
 - No claim of physical-device verification is made from a green CI build.
 - Latest verified application-source build before this documentation sync: commit `6871b2600f89701ffd10dae4f3218ccfad1b4b81`; GitHub Actions run: [40458083724](https://github.com/vinitprajapat0822-coder/Pane-iglass/actions/runs/40458083724). The `pane-debug-apk` artifact was uploaded successfully.
+
+## Liquid Glass upgrade
+
+- App display name updated to Pane Liquid; package ID remains `com.vinit.pane`.
+- The Compose main screen now uses reusable `LiquidGlassMaterial`, `LiquidGlassTabBar`, `LiquidGlassTab`, `LiquidGlassKey`, `LiquidGlassSearchBar`, and `LiquidGlassIntensityController` components.
+- Appearance intensity persists locally in `pane_settings` and is supplied through a CompositionLocal so surface styling updates globally in the main dialer.
+- Android adaptive launcher resources are used for the icon. The default phone-app role remains an explicit Android system confirmation and is requested after runtime permission handling when not already held.
+- Optical refraction is represented with lightweight layered translucent gradients and specular borders, not true live background refraction. Device-specific blur and touch behavior still require testing.
 
 ## Recent build log
 
