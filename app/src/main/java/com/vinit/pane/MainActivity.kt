@@ -31,6 +31,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,6 +55,11 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -210,7 +216,8 @@ internal data class Person(
     val starred: Boolean = false,
     val type: String = "",
     val timestamp: String = "",
-    val simLabel: String = ""
+    val simLabel: String = "",
+    val isNew: Boolean = false
 ) {
     val initials: String get() = name.split(" ").filter { it.isNotBlank() }.take(2)
         .mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").ifBlank { "#" }
@@ -308,7 +315,7 @@ class MainActivity : ComponentActivity() {
         val projection = arrayOf(
             CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME,
             CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION,
-            CallLog.Calls.PHONE_ACCOUNT_ID
+            CallLog.Calls.PHONE_ACCOUNT_ID, CallLog.Calls.NEW
         )
         val telecom = getSystemService(TelecomManager::class.java)
         val phoneAccountLabels: Map<String, String> = runCatching {
@@ -326,6 +333,7 @@ class MainActivity : ComponentActivity() {
                 val dateCol = cursor.getColumnIndexOrThrow(CallLog.Calls.DATE)
                 val idCol = cursor.getColumnIndexOrThrow(CallLog.Calls._ID)
                 val accountIdCol = cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID)
+                val newCol = cursor.getColumnIndex(CallLog.Calls.NEW)
                 while (cursor.moveToNext()) {
                     val number = cursor.getString(numberCol).orEmpty()
                     val name = cursor.getString(nameCol).orEmpty().ifBlank { number.ifBlank { "Unknown caller" } }
@@ -334,12 +342,17 @@ class MainActivity : ComponentActivity() {
                         CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
                         CallLog.Calls.MISSED_TYPE -> "Missed"
                         CallLog.Calls.REJECTED_TYPE -> "Rejected"
+                        CallLog.Calls.VOICEMAIL_TYPE -> "Voicemail"
                         else -> "Call"
                     }
                     val timestamp = runCatching { SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(cursor.getLong(dateCol))) }.getOrDefault("")
                     val accountId = if (accountIdCol >= 0) cursor.getString(accountIdCol).orEmpty() else ""
                     val simLabel = phoneAccountLabels[accountId].orEmpty()
-                    result += Person(cursor.getString(idCol).orEmpty(), name, number, type = type, timestamp = timestamp, simLabel = simLabel)
+                    result += Person(
+                        cursor.getString(idCol).orEmpty(), name, number,
+                        type = type, timestamp = timestamp, simLabel = simLabel,
+                        isNew = newCol >= 0 && cursor.getInt(newCol) == 1
+                    )
                 }
             }
         }
@@ -405,6 +418,18 @@ private fun PaneApp(activity: MainActivity) {
     var themeChoice by remember(prefs) { mutableStateOf(prefs.getString("dialer_theme", "System") ?: "System") }
     var languageChoice by remember(prefs) { mutableStateOf(prefs.getString("app_language", "System default") ?: "System default") }
     var glassIntensity by remember(prefs) { mutableStateOf(prefs.getFloat("liquid_glass_intensity", 0.72f).coerceIn(0f, 1f)) }
+    val primaryTabs = remember { listOf(PaneTab.Recents, PaneTab.Contacts, PaneTab.Keypad) }
+    val navCompactState = remember { mutableStateOf(false) }
+    var navHighlightFraction by remember { mutableFloatStateOf(-1f) }
+    val navScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < -5f) navCompactState.value = true
+                else if (available.y > 5f) navCompactState.value = false
+                return Offset.Zero
+            }
+        }
+    }
     var buttonsChoice by remember(prefs) { mutableStateOf(prefs.getString("call_buttons", "Classic dual buttons") ?: "Classic dual buttons") }
     var incomingChoice by remember(prefs) { mutableStateOf(prefs.getString("incoming_style", "Fullscreen") ?: "Fullscreen") }
     val useDarkPalette = when (themeChoice) {
@@ -533,7 +558,7 @@ private fun PaneApp(activity: MainActivity) {
                 )
                 Spacer(Modifier.height(14.dp))
 
-                Box(Modifier.weight(1f).fillMaxWidth()) {
+                Box(Modifier.weight(1f).fillMaxWidth().nestedScroll(navScrollConnection)) {
                     when (selected) {
                         PaneTab.Keypad -> KeypadPanel(
                             dialed = dialed,
@@ -598,11 +623,39 @@ private fun PaneApp(activity: MainActivity) {
 
                 Spacer(Modifier.height(12.dp))
                 LiquidGlassTabBar(
-                    modifier = Modifier.fillMaxWidth().shadow(22.dp, RoundedCornerShape(30.dp)),
+                    modifier = Modifier.fillMaxWidth()
+                        .shadow(22.dp, RoundedCornerShape(30.dp))
+                        .pointerInput(primaryTabs) {
+                            fun selectTabAt(x: Float) {
+                                val widthPx = size.width.coerceAtLeast(1).toFloat()
+                                val index = ((x / widthPx) * primaryTabs.size).toInt()
+                                    .coerceIn(0, primaryTabs.lastIndex)
+                                val tab = primaryTabs[index]
+                                if (selected != tab) {
+                                    selected = tab
+                                    prefs.edit().putString("default_launch_screen", tab.name).apply()
+                                }
+                            }
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { start ->
+                                    navHighlightFraction = (start.x / size.width.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selectTabAt(start.x)
+                                },
+                                onDrag = { change, _ ->
+                                    navHighlightFraction = (change.position.x / size.width.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+                                    selectTabAt(change.position.x)
+                                },
+                                onDragEnd = { navHighlightFraction = -1f },
+                                onDragCancel = { navHighlightFraction = -1f }
+                            )
+                        },
                     tint = if (useDarkPalette) Color(0xFF173449) else Color(0xFFF8FCFF),
-                    intensity = glassIntensity
+                    intensity = glassIntensity,
+                    compact = navCompactState.value,
+                    highlightFraction = navHighlightFraction.takeIf { it >= 0f }
                 ) {
-                    listOf(PaneTab.Recents, PaneTab.Contacts, PaneTab.Keypad).forEach { tab ->
+                    primaryTabs.forEach { tab ->
                         val active = tab == selected
                         val icon = when (tab) {
                             PaneTab.Favorites -> Icons.Default.Favorite
@@ -621,7 +674,8 @@ private fun PaneApp(activity: MainActivity) {
                             foreground = Ink,
                             muted = Muted,
                             onClick = { selected = tab; prefs.edit().putString("default_launch_screen", tab.name).apply() },
-                            onLongClick = { showGlass(tab.label) }
+                            onLongClick = { },
+                            compact = navCompactState.value
                         )
                     }
                 }
@@ -1078,6 +1132,12 @@ private fun RecentsPanel(
                             .combinedClickable(onClick = {}, onLongClick = { onGlassPress(person.name) }).padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (person.type == "Missed" || (person.type == "Voicemail" && person.isNew)) {
+                            Box(
+                                Modifier.padding(end = 6.dp).size(6.dp).clip(CircleShape)
+                                    .background(if (person.type == "Missed") Color(0xFFFF697F) else Color(0xFF4A9DFF))
+                            )
+                        }
                         Box(
                             Modifier.size(43.dp).clip(CircleShape)
                                 .background(Brush.linearGradient(listOf(Color(0xFF536A95), Color(0xFF293750)))),
@@ -1139,8 +1199,7 @@ private fun PeoplePanel(
             LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
                 items(people, key = { it.id + "|" + it.number + "|" + it.type }) { person ->
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp)).background(Panel)
-                            .border(1.dp, Line.copy(alpha = 0.8f), RoundedCornerShape(19.dp))
+                        Modifier.fillMaxWidth().liquidGlass(Panel, LocalLiquidGlassIntensity.current, RoundedCornerShape(19.dp))
                             .combinedClickable(onClick = {}, onLongClick = { onGlassPress(person.name) }).padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

@@ -51,6 +51,10 @@ Pane is a native Kotlin + Jetpack Compose Android dialer prototype. The project 
 
 ## Liquid Glass upgrade
 
+- Follow-up implementation: the floating Calls / Contacts / Keypad bar now has a long-press-and-slide selection gesture, a finger-following specular highlight, and a scroll-reactive compact state with spring sizing. A low-rate accelerometer signal shifts the ambient highlight; the static gradient remains as a fallback.
+- Contacts rows now use the shared intensity-controlled glass material. Call-log parsing distinguishes voicemail rows and uses Android's call-log NEW flag for a blue new-voicemail marker; missed-call rows receive a red marker. Search clear now uses a spring scale/fade, and keypad taps trigger lightweight haptic feedback.
+- These are source changes pending the updated CI result and Redmi Note 7S manual tests. They do not claim full live optical refraction or verified physical-device calling.
+
 - App display name updated to Pane Liquid; package ID remains `com.vinit.pane`.
 - The Compose main screen now uses reusable `LiquidGlassMaterial`, `LiquidGlassTabBar`, `LiquidGlassTab`, `LiquidGlassKey`, `LiquidGlassSearchBar`, and `LiquidGlassIntensityController` components. The primary nav is Calls / Contacts / Keypad, Calls combines the recents list with All / Missed / Favourites filters, and Settings opens from the top-right glass shortcut.
 - Appearance intensity persists locally in `pane_settings` and is supplied through a CompositionLocal so surface styling updates globally in the main dialer.

@@ -1,12 +1,22 @@
 package com.vinit.pane.ui.glass
 
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -33,13 +43,18 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -49,6 +64,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlin.math.abs
 
 /** User-adjustable glass intensity shared across the Compose dialer surfaces. */
 val LocalLiquidGlassIntensity = compositionLocalOf { 0.72f }
@@ -103,19 +122,73 @@ fun LiquidGlassMaterial(
     )
 }
 
-/** Floating translucent navigation tray; content supplies the tab items. */
+/**
+ * Floating navigation tray. A low-rate accelerometer signal shifts the ambient specular
+ * highlight; compact mode lowers the surface tint and hides labels while scrolling.
+ * The interaction uses gradients only (no continuous shader) for Android 10-class devices.
+ */
 @Composable
 fun LiquidGlassTabBar(
     modifier: Modifier = Modifier,
     tint: Color,
     intensity: Float = LocalLiquidGlassIntensity.current,
+    compact: Boolean = false,
+    highlightFraction: Float? = null,
     content: @Composable RowScope.() -> Unit
 ) {
+    val context = LocalContext.current
+    val sensorManager = remember(context) {
+        context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+    }
+    val ambientX = remember { mutableFloatStateOf(0.38f) }
+    val ambientY = remember { mutableFloatStateOf(0.32f) }
+
+    DisposableEffect(sensorManager) {
+        val sensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        if (sensorManager == null || sensor == null) {
+            onDispose { }
+        } else {
+            val listener = object : SensorEventListener {
+                override fun onSensorChanged(event: SensorEvent) {
+                    if (event.values.size < 2) return
+                    val nextX = (0.5f + event.values[0] / (SensorManager.GRAVITY_EARTH * 2.4f))
+                        .coerceIn(0.08f, 0.92f)
+                    val nextY = (0.5f + event.values[1] / (SensorManager.GRAVITY_EARTH * 3.2f))
+                        .coerceIn(0.12f, 0.88f)
+                    if (abs(nextX - ambientX.floatValue) > 0.025f) ambientX.floatValue = nextX
+                    if (abs(nextY - ambientY.floatValue) > 0.025f) ambientY.floatValue = nextY
+                }
+                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+            }
+            sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+            onDispose { sensorManager.unregisterListener(listener) }
+        }
+    }
+
+    val barHeight by animateDpAsState(
+        targetValue = if (compact) 50.dp else 70.dp,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 560f)
+    )
+    val resolvedIntensity = if (compact) intensity.coerceIn(0f, 1f) * 0.52f else intensity
     Row(
         modifier = modifier
-            .liquidGlass(tint = tint, intensity = intensity, shape = RoundedCornerShape(30.dp))
-            .padding(6.dp),
+            .height(barHeight)
+            .liquidGlass(tint = tint, intensity = resolvedIntensity, shape = RoundedCornerShape(30.dp))
+            .drawBehind {
+                val focusX = (highlightFraction ?: ambientX.floatValue).coerceIn(0f, 1f)
+                val alpha = if (highlightFraction != null) 0.30f else 0.08f + resolvedIntensity * 0.10f
+                drawRoundRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color.White.copy(alpha = alpha), Color.White.copy(alpha = 0f)),
+                        center = Offset(size.width * focusX, size.height * (0.18f + ambientY.floatValue * 0.42f)),
+                        radius = size.height * 1.6f
+                    ),
+                    cornerRadius = CornerRadius(size.height / 2f)
+                )
+            }
+            .padding(if (compact) 4.dp else 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
         content = content
     )
 }
@@ -132,7 +205,8 @@ fun LiquidGlassTab(
     foreground: Color,
     muted: Color,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    compact: Boolean = false
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -165,14 +239,16 @@ fun LiquidGlassTab(
             tint = if (active) accent else muted,
             modifier = Modifier.size(20.dp)
         )
-        Spacer(Modifier.height(3.dp))
-        Text(
-            text = label,
-            color = if (active) foreground else muted,
-            fontSize = 10.sp,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1
-        )
+        if (!compact) {
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = label,
+                color = if (active) foreground else muted,
+                fontSize = 10.sp,
+                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1
+            )
+        }
     }
 }
 
@@ -190,6 +266,7 @@ fun LiquidGlassKey(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val haptics = LocalHapticFeedback.current
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.92f else 1f,
         animationSpec = spring(dampingRatio = 0.48f, stiffness = 640f)
@@ -199,13 +276,17 @@ fun LiquidGlassKey(
             .scale(scale)
             .liquidGlass(
                 tint = tint,
-                intensity = (LocalLiquidGlassIntensity.current + if (pressed) 0.18f else 0f).coerceAtMost(1f),
+                intensity = if (label == "☎") 1f else
+                    (LocalLiquidGlassIntensity.current + if (pressed) 0.18f else 0f).coerceAtMost(1f),
                 shape = CircleShape
             )
             .combinedClickable(
                 interactionSource = interaction,
                 indication = null,
-                onClick = onClick,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClick()
+                },
                 onLongClick = onLongClick
             ),
         contentAlignment = Alignment.Center
@@ -266,7 +347,11 @@ fun LiquidGlassSearchBar(
                     inner()
                 }
             )
-            AnimatedVisibility(visible = value.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
+            AnimatedVisibility(
+                visible = value.isNotEmpty(),
+                enter = fadeIn() + scaleIn(animationSpec = spring(dampingRatio = 0.72f, stiffness = 620f)),
+                exit = fadeOut() + scaleOut(animationSpec = spring(dampingRatio = 0.85f, stiffness = 700f))
+            ) {
                 Box(
                     modifier = Modifier.size(28.dp).clip(CircleShape)
                         .clickable { onValueChange("") },
