@@ -373,7 +373,7 @@ private fun PaneApp(activity: MainActivity) {
         mutableStateOf(runCatching { PaneTab.valueOf(prefs.getString("default_launch_screen", "Favorites") ?: "Favorites") }.getOrDefault(PaneTab.Favorites))
     }
     var query by remember { mutableStateOf("") }
-    var dialed by remember { mutableStateOf("") }
+    var dialed by remember { mutableStateOf(activity.intent?.data?.takeIf { it.scheme == "tel" }?.schemeSpecificPart.orEmpty()) }
     var contacts by remember { mutableStateOf(emptyList<Person>()) }
     var recents by remember { mutableStateOf(emptyList<Person>()) }
     var recentFilter by remember { mutableStateOf("All") }
