@@ -203,10 +203,11 @@ internal data class Person(
 }
 
 class MainActivity : ComponentActivity() {
-    private val dtmfTone = ToneGenerator(AudioManager.STREAM_DTMF, 72)
+    private val dtmfTone = ToneGenerator(AudioManager.STREAM_DTMF, 82)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        volumeControlStream = AudioManager.STREAM_DTMF
         setContent {
             MaterialTheme {
                 CompositionLocalProvider(
@@ -226,7 +227,7 @@ class MainActivity : ComponentActivity() {
     }
 
     fun playDtmf(digit: String) {
-        if (!getSharedPreferences("pane_settings", Context.MODE_PRIVATE).getBoolean("Enable DTMF Tone", false)) return
+        if (!getSharedPreferences("pane_settings", Context.MODE_PRIVATE).getBoolean("Enable DTMF Tone", true)) return
         val tone = when (digit) {
             "0" -> ToneGenerator.TONE_DTMF_0
             "1" -> ToneGenerator.TONE_DTMF_1
@@ -242,7 +243,7 @@ class MainActivity : ComponentActivity() {
             "#" -> ToneGenerator.TONE_DTMF_P
             else -> return
         }
-        runCatching { dtmfTone.startTone(tone, 120) }
+        runCatching { dtmfTone.stopTone(); dtmfTone.startTone(tone, 130) }
     }
 
     fun hasPermission(permission: String): Boolean =
@@ -658,7 +659,7 @@ private fun SettingsPanel(
     val switchRows = setOf("Call Announcer", "Flash On Call", "Contact Photo on Call", "Enable DTMF Tone")
     val context = LocalContext.current
     val prefs = remember(context) { context.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
-    val states = remember(prefs) { mutableStateMapOf<String, Boolean>().apply { switchRows.forEach { this[it] = prefs.getBoolean(it, false) } } }
+    val states = remember(prefs) { mutableStateMapOf<String, Boolean>().apply { switchRows.forEach { this[it] = prefs.getBoolean(it, it == "Enable DTMF Tone") } } }
     var selected by remember { mutableStateOf<String?>(null) }
     var speedDialNumber by remember { mutableStateOf("") }
     var blockNumber by remember { mutableStateOf("") }
