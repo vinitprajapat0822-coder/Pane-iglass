@@ -107,6 +107,7 @@ private val LocalPaneLanguage = compositionLocalOf { "System default" }
 
 private val HindiLabels = mapOf(
     "Favourites" to "पसंदीदा",
+    "Calls" to "कॉल",
     "Appearance" to "दिखावट",
     "Liquid Glass intensity" to "लिक्विड ग्लास की तीव्रता",
     "CLEAR" to "पारदर्शी",
@@ -199,7 +200,7 @@ private val Accent: Color @Composable get() = LocalPanePalette.current.accent
 private val CallGreen: Color @Composable get() = LocalPanePalette.current.callGreen
 
 private enum class PaneTab(val label: String) {
-    Favorites("Favourites"), Recents("Recents"), Contacts("Contacts"), Keypad("Keypad"), Settings("Settings")
+    Favorites("Favourites"), Recents("Calls"), Contacts("Contacts"), Keypad("Keypad"), Settings("Settings")
 }
 
 internal data class Person(
@@ -382,7 +383,10 @@ class MainActivity : ComponentActivity() {
 private fun PaneApp(activity: MainActivity) {
     val prefs = remember(activity) { activity.getSharedPreferences("pane_settings", Context.MODE_PRIVATE) }
     var selected by remember(prefs) {
-        mutableStateOf(runCatching { PaneTab.valueOf(prefs.getString("default_launch_screen", "Favorites") ?: "Favorites") }.getOrDefault(PaneTab.Favorites))
+        val saved = runCatching {
+            PaneTab.valueOf(prefs.getString("default_launch_screen", "Recents") ?: "Recents")
+        }.getOrDefault(PaneTab.Recents)
+        mutableStateOf(if (saved == PaneTab.Favorites) PaneTab.Recents else saved)
     }
     var query by remember { mutableStateOf("") }
     var dialed by remember { mutableStateOf(activity.intent?.data?.takeIf { it.scheme == "tel" }?.schemeSpecificPart.orEmpty()) }
@@ -477,7 +481,7 @@ private fun PaneApp(activity: MainActivity) {
                         Text(
                             when (selected) {
                                 PaneTab.Favorites -> "Your people"
-                                PaneTab.Recents -> "Recent calls"
+                                PaneTab.Recents -> "Calls"
                                 PaneTab.Contacts -> "Contacts"
                                 PaneTab.Keypad -> "Keypad"
                                 PaneTab.Settings -> "Settings"
@@ -485,13 +489,20 @@ private fun PaneApp(activity: MainActivity) {
                         )
                     }
                     Column(
-                        Modifier.clip(RoundedCornerShape(18.dp)).background(Panel)
-                            .border(1.dp, Line.copy(alpha = 0.75f), RoundedCornerShape(18.dp))
+                        Modifier.clip(RoundedCornerShape(18.dp))
+                            .liquidGlass(Panel, glassIntensity, RoundedCornerShape(18.dp))
+                            .combinedClickable(
+                                onClick = {
+                                    selected = PaneTab.Settings
+                                    prefs.edit().putString("default_launch_screen", PaneTab.Settings.name).apply()
+                                },
+                                onLongClick = { showGlass("Settings") }
+                            )
                             .padding(horizontal = 11.dp, vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("LOCAL", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                        Text("•", color = CallGreen, fontSize = 17.sp, lineHeight = 15.sp)
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Accent, modifier = Modifier.size(18.dp))
+                        Text("SETTINGS", color = Accent, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
                     }
                 }
 
@@ -548,9 +559,17 @@ private fun PaneApp(activity: MainActivity) {
                             onGlassPress = showGlass
                         )
                         PaneTab.Recents -> RecentsPanel(
-                            people = recents.filter { it.name.contains(query, true) || it.number.contains(query, true) }
-                                .filter { recentFilter == "All" || it.type == "Missed" },
-                            emptyMessage = if (!activity.hasPermission(Manifest.permission.READ_CALL_LOG)) "Call-log permission is needed to show recent calls." else "No recent calls found.",
+                            people = if (recentFilter == "Favourites") {
+                                contacts.filter { it.starred && (it.name.contains(query, true) || it.number.contains(query, true)) }
+                            } else {
+                                recents.filter { it.name.contains(query, true) || it.number.contains(query, true) }
+                                    .filter { recentFilter == "All" || it.type == "Missed" }
+                            },
+                            emptyMessage = when {
+                                recentFilter == "Favourites" -> "No starred contacts found. Star contacts in your phone's Contacts app."
+                                !activity.hasPermission(Manifest.permission.READ_CALL_LOG) -> "Call-log permission is needed to show recent calls."
+                                else -> "No recent calls found."
+                            },
                             onCall = activity::openDialer,
                             filter = recentFilter,
                             onFilterChange = { recentFilter = it },
@@ -583,7 +602,7 @@ private fun PaneApp(activity: MainActivity) {
                     tint = if (useDarkPalette) Color(0xFF173449) else Color(0xFFF8FCFF),
                     intensity = glassIntensity
                 ) {
-                    PaneTab.values().forEach { tab ->
+                    listOf(PaneTab.Recents, PaneTab.Contacts, PaneTab.Keypad).forEach { tab ->
                         val active = tab == selected
                         val icon = when (tab) {
                             PaneTab.Favorites -> Icons.Default.Favorite
@@ -644,6 +663,7 @@ private fun PaneApp(activity: MainActivity) {
 
 
 private fun settingGlyph(label: String): String = when (label) {
+    "Appearance" -> "◈"
     "Call Backgrounds" -> "◌"
     "Dialer Themes" -> "✧"
     "Call Buttons" -> "⇄"
@@ -793,6 +813,9 @@ private fun SettingsPanel(
                             foreground = Ink,
                             muted = Muted,
                             tint = Panel,
+                            title = localizedLabel("Liquid Glass intensity"),
+                            clearLabel = localizedLabel("CLEAR"),
+                            tintedLabel = localizedLabel("TINTED"),
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text("The interface uses lightweight gradients and specular edges for performance on Android 10.", color = Muted, fontSize = 11.sp)
@@ -1019,7 +1042,7 @@ private fun RecentsPanel(
                     .border(1.dp, Line, RoundedCornerShape(14.dp)).padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                listOf("All", "Missed").forEach { option ->
+                listOf("All", "Missed", "Favourites").forEach { option ->
                     Box(
                         Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
                             .background(if (filter == option) Accent.copy(alpha = 0.19f) else Color.Transparent)
@@ -1041,7 +1064,7 @@ private fun RecentsPanel(
                 ).padding(8.dp))
         }
         Spacer(Modifier.height(12.dp))
-        Text("CALL LOG · LATEST FIRST", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        Text(if (filter == "Favourites") "STARRED CONTACTS" else "CALL LOG · LATEST FIRST", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
         Spacer(Modifier.height(9.dp))
         if (people.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

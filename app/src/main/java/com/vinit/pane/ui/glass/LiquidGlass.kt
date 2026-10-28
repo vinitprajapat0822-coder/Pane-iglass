@@ -287,11 +287,14 @@ fun LiquidGlassIntensityController(
     foreground: Color,
     muted: Color,
     tint: Color,
+    title: String = "Liquid Glass intensity",
+    clearLabel: String = "CLEAR",
+    tintedLabel: String = "TINTED",
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Liquid Glass intensity", color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text(title, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Text("${(value.coerceIn(0f, 1f) * 100).toInt()}%", color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
         Slider(
@@ -305,8 +308,8 @@ fun LiquidGlassIntensityController(
             )
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("CLEAR", color = muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, modifier = Modifier.weight(1f))
-            Text("TINTED", color = muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+            Text(clearLabel, color = muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, modifier = Modifier.weight(1f))
+            Text(tintedLabel, color = muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
         }
         LiquidGlassMaterial(
             modifier = Modifier.fillMaxWidth(),

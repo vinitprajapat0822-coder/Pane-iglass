@@ -8,7 +8,7 @@ Pane is a native Kotlin + Jetpack Compose Android dialer prototype. The project 
 
 | Area | Current status | Notes |
 |---|---|---|
-| Five-tab app shell | Done in source | Favourites, Recents, Contacts, Keypad, Settings |
+| Three-tab primary navigation | Done in source | Calls (All / Missed / Favourites filters), Contacts, Keypad; Settings opens from a top-right glass shortcut |
 | UI / typography refresh | Done in source | Floating translucent navigation, cool blue/teal glass palette, reusable glass material, animated press scaling, and specular-edge gradients |
 | Contacts and favourites | Done in source | Uses Android Contacts Provider after permission |
 | Recents | Done in source | All/Missed filter, latest-first call history, timestamp, account/SIM label where Android reports it, call details and dialer handoff |
@@ -52,7 +52,7 @@ Pane is a native Kotlin + Jetpack Compose Android dialer prototype. The project 
 ## Liquid Glass upgrade
 
 - App display name updated to Pane Liquid; package ID remains `com.vinit.pane`.
-- The Compose main screen now uses reusable `LiquidGlassMaterial`, `LiquidGlassTabBar`, `LiquidGlassTab`, `LiquidGlassKey`, `LiquidGlassSearchBar`, and `LiquidGlassIntensityController` components.
+- The Compose main screen now uses reusable `LiquidGlassMaterial`, `LiquidGlassTabBar`, `LiquidGlassTab`, `LiquidGlassKey`, `LiquidGlassSearchBar`, and `LiquidGlassIntensityController` components. The primary nav is Calls / Contacts / Keypad, Calls combines the recents list with All / Missed / Favourites filters, and Settings opens from the top-right glass shortcut.
 - Appearance intensity persists locally in `pane_settings` and is supplied through a CompositionLocal so surface styling updates globally in the main dialer.
 - Android adaptive launcher resources are used for the icon. The default phone-app role remains an explicit Android system confirmation and is requested after runtime permission handling when not already held.
 - Optical refraction is represented with lightweight layered translucent gradients and specular borders, not true live background refraction. Device-specific blur and touch behavior still require testing.
