@@ -204,7 +204,7 @@ internal data class Person(
 }
 
 class MainActivity : ComponentActivity() {
-    private val dtmfTone = ToneGenerator(AudioManager.STREAM_DTMF, 82)
+    private val dtmfTone = ToneGenerator(AudioManager.STREAM_DTMF, 100)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
